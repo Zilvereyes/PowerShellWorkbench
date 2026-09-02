@@ -6,32 +6,77 @@ param(
     [ValidateSet('Auto', 'Generic', 'RecoveryToolkit', 'WingetDownloader', 'WindowsServicingToolkit')]
     [string]$RequestedProfile = 'Auto',
 
-    [string]$RegistryPath
+    [string]$RegistryPath,
+
+    [ValidateRange(0, 10)]
+    [int]$MaxDepth = 3,
+
+    [switch]$Fast
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+$servicingInventoryCache = @{}
+$directoryScanCache = @{}
+$excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts', 'Outdated', 'Previous_Working_Snapshots', 'Backup', '_GitRootArchive_')
+$effectiveMaxDepth = if ($Fast) { 1 } else { $MaxDepth }
+
+function Get-DirectoryScan {
+    param([string]$Path)
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    if ($directoryScanCache.ContainsKey($resolved)) { return $directoryScanCache[$resolved] }
+    $files = @(Get-ChildItem -LiteralPath $resolved -File -Recurse -Depth $effectiveMaxDepth -ErrorAction SilentlyContinue | Where-Object {
+        $relative = $_.FullName.Substring($resolved.Length).TrimStart([char[]]'\\/')
+        -not @($excludedSegments | Where-Object { $relative -match ('(^|[\\/])' + [regex]::Escape($_) + '([\\/]|$)') }).Count
+    })
+    $contentFiles = @($files | Where-Object { $_.Extension -in @('.ps1', '.psm1', '.psd1', '.json', '.yaml', '.yml', '.xml', '.txt') })
+    $scan = [pscustomobject]@{ Path = $resolved; Files = $files; ContentFiles = $contentFiles }
+    $directoryScanCache[$resolved] = $scan
+    $scan
+}
+
+function Get-CachedServicingInventory {
+    param([string]$Path)
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    if ($servicingInventoryCache.ContainsKey($resolved)) { return $servicingInventoryCache[$resolved] }
+    $scan = Get-DirectoryScan -Path $resolved
+    $inventory = Get-ServicingInventory -Path $resolved -DirectoryScan $scan
+    $servicingInventoryCache[$resolved] = $inventory
+    $inventory
+}
 
 function Get-ProfileAtPath {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [psobject]$ServicingInventory,
+        [psobject]$DirectoryScan
+    )
 
     if (Test-Path -LiteralPath (Join-Path $Path 'RecoveryToolkit.psd1')) { return 'RecoveryToolkit' }
     if (Test-Path -LiteralPath (Join-Path $Path 'WingetDownloader.psd1')) { return 'WingetDownloader' }
-    if ((Get-ServicingInventory -Path $Path).Detected) { return 'WindowsServicingToolkit' }
-    if (Test-Path -LiteralPath (Join-Path $Path '.git')) { return 'Generic' }
-    if (@(Get-ChildItem -LiteralPath $Path -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.psd1', '.psm1') }).Count -gt 0) { return 'Generic' }
+    if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $Path }
+    if ($ServicingInventory.Detected) { return 'WindowsServicingToolkit' }
+    if (@($DirectoryScan.Files | Where-Object { $_.Extension -in @('.psd1', '.psm1') }).Count -gt 0) { return 'Generic' }
+    return $null
+}
+
+function Get-ExplicitProfileAtPath {
+    param([string]$Path)
+
+    if (Test-Path -LiteralPath (Join-Path $Path 'RecoveryToolkit.psd1')) { return @{ Profile = 'RecoveryToolkit'; Evidence = 'Manifest:RecoveryToolkit.psd1' } }
+    if (Test-Path -LiteralPath (Join-Path $Path 'WingetDownloader.psd1')) { return @{ Profile = 'WingetDownloader'; Evidence = 'Manifest:WingetDownloader.psd1' } }
+    if (Test-Path -LiteralPath (Join-Path $Path '.powershell-workbench\project-profile.json')) { return @{ Profile = 'Generic'; Evidence = 'PortableProfile:.powershell-workbench/project-profile.json' } }
+    if (Test-Path -LiteralPath (Join-Path $Path '.powershell-workbench')) { return @{ Profile = 'Generic'; Evidence = 'PortableProfile:.powershell-workbench' } }
+    if (Test-Path -LiteralPath (Join-Path $Path '.git')) { return @{ Profile = 'Generic'; Evidence = 'RepositoryBoundary:.git' } }
     return $null
 }
 
 function Get-TechnologiesAtPath {
-    param([string]$Path)
+    param([string]$Path,[psobject]$DirectoryScan)
 
     $technologies = New-Object System.Collections.Generic.List[string]
-    $excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts')
-    $files = @(Get-ChildItem -LiteralPath $Path -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Where-Object {
-        $relative = $_.FullName.Substring($Path.Length).TrimStart([char[]]'\\/')
-        -not @($excludedSegments | Where-Object { $relative -match ('(^|[\\/])' + [regex]::Escape($_) + '([\\/]|$)') }).Count
-    })
+    if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $Path }
+    $files = $DirectoryScan.Files
     if (@($files | Where-Object { $_.Extension -in @('.ps1', '.psm1', '.psd1') }).Count -gt 0) { $technologies.Add('PowerShell') }
     if (@($files | Where-Object { $_.Name -in @('pyproject.toml', 'requirements.txt') -or $_.Extension -eq '.py' }).Count -gt 0) { $technologies.Add('Python') }
     if (@($files | Where-Object Name -eq 'package.json').Count -gt 0) { $technologies.Add('Node') }
@@ -44,14 +89,11 @@ function Get-TechnologiesAtPath {
 }
 
 function Get-ServicingInventory {
-    param([string]$Path)
+    param([string]$Path,[psobject]$DirectoryScan)
 
-    $excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts')
-    $files = @(Get-ChildItem -LiteralPath $Path -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Where-Object {
-        $relative = $_.FullName.Substring($Path.Length).TrimStart([char[]]'\\/')
-        -not @($excludedSegments | Where-Object { $relative -match ('(^|[\\/])' + [regex]::Escape($_) + '([\\/]|$)') }).Count
-    })
-    $contentFiles = @($files | Where-Object { $_.Extension -in @('.ps1', '.psm1', '.psd1', '.json', '.yaml', '.yml', '.xml', '.txt') })
+    if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $Path }
+    $files = $DirectoryScan.Files
+    $contentFiles = $DirectoryScan.ContentFiles
     $hasPattern = {
         param([string]$Pattern)
         if (-not $contentFiles) { return $false }
@@ -95,7 +137,15 @@ function Get-PowerShellRuntimeInventory {
         $versionLines = @(& $resolved -NoProfile -EncodedCommand $encodedProbe 2>$null)
         if ($LASTEXITCODE -ne 0 -or $versionLines.Count -lt 2) { $versionLines = @('Unknown', 'Unknown') }
         $architecture = if ($resolved -match '(?i)(x64|amd64)') { 'x64' } elseif ($resolved -match '(?i)x86') { 'x86' } else { 'Unknown' }
-        $runtimes.Add([pscustomobject]@{ Path=$resolved; Edition=[string]$versionLines[0]; Version=[string]$versionLines[1]; Architecture=$architecture; Source=$Source; Pinned=$Pinned })
+        $runtimes.Add([pscustomobject]@{
+            Path=$resolved
+            Edition=[string]$versionLines[0]
+            Version=[string]$versionLines[1]
+            Architecture=$architecture
+            Source=$Source
+            Pinned=$Pinned
+            Evidence="powershell-runtime:$Source"
+        })
     }
     foreach ($name in @('powershell.exe', 'pwsh.exe')) { foreach ($command in @(Get-Command $name -All -ErrorAction SilentlyContinue)) { & $addRuntime $command.Source 'PATH' $false } }
     $windowsApps = Join-Path $env:ProgramFiles 'WindowsApps'
@@ -104,30 +154,58 @@ function Get-PowerShellRuntimeInventory {
 }
 
 function Get-ContextResult {
-    param([string]$ProfileName, [string]$ProjectRoot, [string]$Source)
-    $servicing = Get-ServicingInventory -Path $ProjectRoot
-    [pscustomobject]@{ Profile=$ProfileName; ProjectRoot=$ProjectRoot; Source=$Source; Technologies=@(Get-TechnologiesAtPath -Path $ProjectRoot); NativeTools=$servicing.NativeTools; ArtifactTypes=$servicing.ArtifactTypes; RiskSurfaces=$servicing.RiskSurfaces; DetectedPowerShellRuntimes=@(Get-PowerShellRuntimeInventory) }
+    param(
+        [string]$ProfileName,
+        [string]$ProjectRoot,
+        [string]$Source,
+        [string]$ProjectRootEvidence,
+        [string]$ProfileEvidence,
+        [psobject]$ServicingInventory,
+        [psobject]$DirectoryScan
+    )
+    if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $ProjectRoot }
+    if (-not $ServicingInventory) { $ServicingInventory = Get-CachedServicingInventory -Path $ProjectRoot }
+    [pscustomobject]@{
+        Profile=$ProfileName
+        ProjectRoot=$ProjectRoot
+        ProjectRootEvidence=$ProjectRootEvidence
+        ProfileEvidence=$ProfileEvidence
+        Source=$Source
+        Technologies=@(Get-TechnologiesAtPath -Path $ProjectRoot -DirectoryScan $DirectoryScan)
+        NativeTools=$ServicingInventory.NativeTools
+        ArtifactTypes=$ServicingInventory.ArtifactTypes
+        RiskSurfaces=$ServicingInventory.RiskSurfaces
+        DetectedPowerShellRuntimes=@(Get-PowerShellRuntimeInventory)
+    }
 }
 
 $candidate = [System.IO.Path]::GetFullPath($StartPath)
 if (Test-Path -LiteralPath $candidate -PathType Leaf) { $candidate = Split-Path -Parent $candidate }
-$fallbackRoot = $candidate
-while (-not (Test-Path -LiteralPath $fallbackRoot -PathType Container)) {
-    $fallbackParent = Split-Path -Parent $fallbackRoot
-    if ([string]::IsNullOrWhiteSpace($fallbackParent) -or $fallbackParent -eq $fallbackRoot) { $fallbackRoot = ''; break }
-    $fallbackRoot = $fallbackParent
+
+$ancestors = @()
+$scan = $candidate
+while (-not [string]::IsNullOrWhiteSpace($scan)) {
+    if (Test-Path -LiteralPath $scan -PathType Container) { $ancestors += $scan }
+    $parent = Split-Path -Parent $scan
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $scan) { break }
+    $scan = $parent
 }
-while (-not [string]::IsNullOrWhiteSpace($candidate)) {
-    if (Test-Path -LiteralPath $candidate -PathType Container) {
-        $detectedProfile = Get-ProfileAtPath -Path $candidate
-        if ($detectedProfile -and ($RequestedProfile -in @('Auto', $detectedProfile) -or ($RequestedProfile -eq 'Generic' -and $detectedProfile -eq 'Generic'))) {
-            Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $candidate -Source 'Ancestor'
-            return
+
+# Explicit project boundaries first so heuristics never override a higher-confidence root.
+foreach ($root in $ancestors) {
+    $explicitProfile = Get-ExplicitProfileAtPath -Path $root
+    if ($explicitProfile) {
+        $scan = Get-DirectoryScan -Path $root
+        $servicing = Get-CachedServicingInventory -Path $root
+        $profileName = $explicitProfile.Profile
+        $profileEvidence = $explicitProfile.Evidence
+        if ($profileName -eq 'Generic' -and $servicing.Detected) {
+            $profileName = 'WindowsServicingToolkit'
+            $profileEvidence = 'Capability:WindowsServicingToolkit'
         }
+        Get-ContextResult -ProfileName $profileName -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $explicitProfile.Evidence -ProfileEvidence $profileEvidence -ServicingInventory $servicing -DirectoryScan $scan
+        return
     }
-    $parent = Split-Path -Parent $candidate
-    if ($parent -eq $candidate) { break }
-    $candidate = $parent
 }
 
 if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
@@ -141,18 +219,39 @@ if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
 
 if ($RegistryPath -and (Test-Path -LiteralPath $RegistryPath -PathType Leaf)) {
     $registry = Get-Content -LiteralPath $RegistryPath -Raw | ConvertFrom-Json
-    foreach ($project in @($registry.projects)) {
+foreach ($project in @($registry.projects)) {
         if ($project.path -and (Test-Path -LiteralPath $project.path -PathType Container) -and ($RequestedProfile -eq 'Auto' -or $project.profile -eq $RequestedProfile)) {
             $registeredRoot = [System.IO.Path]::GetFullPath([string]$project.path)
-            Get-ContextResult -ProfileName ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry'
+            Get-ContextResult -ProfileName ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry' -ProjectRootEvidence $registeredRoot -ProfileEvidence ('Registry:' + [string]$project.profile)
             return
         }
     }
 }
 
-if ($RequestedProfile -in @('Auto', 'Generic') -and $fallbackRoot) {
-    Get-ContextResult -ProfileName 'Generic' -ProjectRoot $fallbackRoot -Source 'StartPath'
+foreach ($root in $ancestors) {
+    $scan = Get-DirectoryScan -Path $root
+    $servicing = Get-CachedServicingInventory -Path $root
+    $detectedProfile = Get-ProfileAtPath -Path $root -ServicingInventory $servicing -DirectoryScan $scan
+    if ($detectedProfile -and ($RequestedProfile -in @('Auto', $detectedProfile) -or ($RequestedProfile -eq 'Generic' -and $detectedProfile -eq 'Generic'))) {
+        Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $root -Source 'Ancestor' -ProjectRootEvidence $root -ProfileEvidence ('HeuristicProfile:' + $detectedProfile) -ServicingInventory $servicing -DirectoryScan $scan
+        return
+    }
+}
+
+if ($RequestedProfile -in @('Auto', 'Generic') -and $ancestors.Count -gt 0) {
+    Get-ContextResult -ProfileName 'Generic' -ProjectRoot ($ancestors[-1]) -Source 'StartPath' -ProjectRootEvidence $ancestors[-1] -ProfileEvidence 'StartPathFallback'
     return
 }
 
-[pscustomobject]@{ Profile = $(if ($RequestedProfile -eq 'Auto') { 'Generic' } else { $RequestedProfile }); ProjectRoot = ''; Source = 'Unresolved'; Technologies = @(); NativeTools = @(); ArtifactTypes = @(); RiskSurfaces = @(); DetectedPowerShellRuntimes = @() }
+[pscustomobject]@{
+    Profile = $(if ($RequestedProfile -eq 'Auto') { 'Generic' } else { $RequestedProfile })
+    ProjectRoot = ''
+    ProjectRootEvidence = ''
+    ProfileEvidence = 'Unresolved'
+    Source = 'Unresolved'
+    Technologies = @()
+    NativeTools = @()
+    ArtifactTypes = @()
+    RiskSurfaces = @()
+    DetectedPowerShellRuntimes = @()
+}

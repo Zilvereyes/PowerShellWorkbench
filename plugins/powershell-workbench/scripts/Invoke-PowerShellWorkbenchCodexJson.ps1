@@ -188,7 +188,7 @@ if ($FixturePath) {
     $fixtureResolved = (Resolve-Path -LiteralPath $FixturePath).Path
     $fixtureSha256 = (Get-FileHash -LiteralPath $fixtureResolved -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-$argumentHashInput = @($arguments | Select-Object -SkipLast 1) | ConvertTo-Json -Compress
+$argumentHashInput = @($arguments) | ConvertTo-Json -Compress
 $metadata = [ordered]@{
     schemaVersion = '2.0'
     runId = $runId

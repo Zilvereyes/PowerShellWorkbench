@@ -31,4 +31,4 @@ Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'skills') -Filter 'SKILL.md' -
 }
 
 if ($failures.Count) { $failures | ForEach-Object { Write-Error $_ }; exit 1 }
-Write-Output "PowerShell Workbench plugin validation passed for $($manifest.version)."
+Write-Output "PowerShell Workbench structural validation passed for $($manifest.version). Contract tests and optional quality gates are separate."

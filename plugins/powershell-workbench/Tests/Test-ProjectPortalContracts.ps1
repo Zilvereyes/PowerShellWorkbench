@@ -17,4 +17,7 @@ try{
     $preview=& $portal -ProfilePath $profilePath -ProjectRoot '.' -ComponentRoot @{main='src'} -WorkingPath @{cache='.cache'} -WindowsTarget @('Windows 11') -NoWrite
     $after=Get-Content -LiteralPath $profilePath -Raw
     if($preview.WasUpdated -or $before -ne $after -or $preview.Components.Count -ne 1){throw 'NoWrite portal preview modified or failed to map the profile.'}
+    $missingPath=Join-Path $tempRoot '.powershell-workbench\missing-project-profile.json'
+    $missingPreview=& $portal -ProfilePath $missingPath -NoWrite
+    if($missingPreview.WasUpdated -or $missingPreview.ProfilePath -ne $missingPath -or (Test-Path -LiteralPath $missingPath -PathType Leaf)){throw 'Missing-profile NoWrite preview behaved unexpectedly.'}
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}
