@@ -18,7 +18,7 @@ function Invoke-EvidenceValidation {
     foreach($key in $Parameters.Keys){$invoke[$key]=$Parameters[$key]}
     & $script:validator @invoke
 }
-function New-EvidenceMetadata {
+function New-EvidenceFixture {
     [CmdletBinding(SupportsShouldProcess)]
     param([string]$Jsonl,[bool]$TimedOut=$false,[int]$ProcessExitCode=0,[string]$CaptureStatus='Completed',[string]$ExecutablePath=$script:HostExecutable)
     $stderr=Join-Path $tempRoot ((Split-Path -Leaf $Jsonl)+'.stderr.log')
@@ -42,27 +42,27 @@ try {
     $script:HostExecutable=(Get-Process -Id $PID).Path
     $script:ExpectedExecutableHash=(Get-FileHash $script:HostExecutable -Algorithm SHA256).Hash
     $success=Join-Path $fixtures 'success.jsonl'
-    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $success) -Parameters @{MinimumSuccessfulToolCalls=1;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success) -Parameters @{MinimumSuccessfulToolCalls=1;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
     Assert-True $result.Passed 'Success fixture did not pass.'
 
     foreach($name in @('tool-failure-process-zero.jsonl','empty.jsonl','malformed.jsonl','no-tool-call.jsonl')){
         $path=Join-Path $fixtures $name
-        $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $path) -Parameters @{MinimumSuccessfulToolCalls=1}
+        $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $path) -Parameters @{MinimumSuccessfulToolCalls=1}
         Assert-True (-not $result.Passed) "$name produced a false positive."
     }
-    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $success) -Parameters @{ExpectedExecutableSha256=('0'*64)}
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success) -Parameters @{ExpectedExecutableSha256=('0'*64)}
     Assert-True (-not $result.Passed) 'Executable substitution produced a false positive.'
 
     $tampered=Join-Path $tempRoot 'tampered.jsonl'
     Copy-Item -LiteralPath $success -Destination $tampered
-    $metadataPath=New-EvidenceMetadata $tampered
+    $metadataPath=New-EvidenceFixture $tampered
     Add-Content -LiteralPath $tampered -Value '{"type":"unknown.additive"}'
     $result=Invoke-EvidenceValidation -MetadataPath $metadataPath
     Assert-True (-not $result.Passed) 'Artifact substitution produced a false positive.'
 
     $substituted=Join-Path $tempRoot 'substituted.jsonl'
     Copy-Item -LiteralPath $success -Destination $substituted
-    $metadataPath=New-EvidenceMetadata $substituted
+    $metadataPath=New-EvidenceFixture $substituted
     $trustedMetadataHash=(Get-FileHash -LiteralPath $metadataPath -Algorithm SHA256).Hash
     Add-Content -LiteralPath $substituted -Value '{"type":"unknown.additive"}'
     $mutableMetadata=Get-Content -LiteralPath $metadataPath -Raw|ConvertFrom-Json
@@ -72,7 +72,7 @@ try {
     $result=& $validator -MetadataPath $metadataPath -ExpectedMetadataSha256 $trustedMetadataHash -ExpectedExecutableSha256 $script:ExpectedExecutableHash -AcceptUnverifiedRuntimeDeclarations -NoThrow
     Assert-True (-not $result.Passed) 'Metadata and artifact substitution bypassed the out-of-band digest.'
 
-    $remoteMetadata=New-EvidenceMetadata $success
+    $remoteMetadata=New-EvidenceFixture $success
     $remoteObject=Get-Content -LiteralPath $remoteMetadata -Raw|ConvertFrom-Json
     $remoteObject.declarations.provider.endpoint='https://example.com/'
     $remoteObject.declarations.provider.isLoopback=$true
@@ -82,10 +82,10 @@ try {
 
     $lateMessage=Join-Path $tempRoot 'late-message.jsonl'
     @('{"type":"thread.started","thread_id":"x"}','{"type":"turn.started"}','{"type":"turn.completed"}','{"type":"item.completed","item":{"id":"message-late","type":"agent_message","text":"EXACT_OK"}}')|Set-Content -LiteralPath $lateMessage
-    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $lateMessage) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $lateMessage) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
     Assert-True (-not $result.Passed) 'An agent message outside the active turn satisfied the final-text contract.'
 
-    $largeStderrMetadata=New-EvidenceMetadata $success
+    $largeStderrMetadata=New-EvidenceFixture $success
     $largeStderrObject=Get-Content -LiteralPath $largeStderrMetadata -Raw|ConvertFrom-Json
     $largeStderrPath=[string]$largeStderrObject.artifacts.stderr
     [IO.File]::WriteAllText($largeStderrPath,('x'*2048))
@@ -97,11 +97,11 @@ try {
 
     $orphan=Join-Path $tempRoot 'orphan.jsonl'
     @('{"type":"thread.started","thread_id":"x"}','{"type":"turn.started"}','{"type":"item.completed","item":{"id":"x","type":"command_execution","status":"completed","exit_code":0}}','{"type":"turn.completed"}')|Set-Content $orphan
-    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $orphan) -Parameters @{MinimumSuccessfulToolCalls=1}
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $orphan) -Parameters @{MinimumSuccessfulToolCalls=1}
     Assert-True (-not $result.Passed) 'Orphan completion produced a false positive.'
 
     $retry=Join-Path $fixtures 'tool-retry.jsonl'
-    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceMetadata $retry) -Parameters @{FailOnToolRetry=$true}
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $retry) -Parameters @{FailOnToolRetry=$true}
     Assert-True (-not $result.Passed) 'Tool retry passed a no-retry gate.'
 
     $tokens=$null;$errors=$null
