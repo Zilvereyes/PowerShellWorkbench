@@ -18,6 +18,7 @@ param(
     [ValidateRange(1, 1000000)][int]$MaxEvents = 100000,
     [ValidateRange(1, 10000)][int]$MaxFailures = 100,
     [string[]]$AllowedStderrRegex = @(),
+    [string[]]$AllowedAdvisoryRegex = @(),
     [string]$ExpectedCodexVersion,
     [string]$ExpectedModelId,
     [string]$ExpectedModelDigest,
@@ -33,6 +34,19 @@ $script:MaximumFailures = $MaxFailures
 function Get-PropertyValue { param($Object,[string]$Name,$Default=$null) if($null -eq $Object){return $Default};$p=$Object.PSObject.Properties[$Name];if($null -eq $p){return $Default};$p.Value }
 function Get-LowerHash { param([string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function Add-Failure { param([string]$Message) if($script:failures.Count -lt $script:MaximumFailures){$script:failures.Add($Message)} }
+function Test-AllowedAdvisory {
+    param([string]$EventType,$Item,[string]$Status,[string[]]$Patterns)
+    if($Patterns.Count -eq 0 -or $EventType -ne 'item.completed' -or [string](Get-PropertyValue -Object $Item -Name 'type') -ne 'error'){return $false}
+    if($Status -and $Status -notin @('completed','success','succeeded')){return $false}
+    if($null -ne (Get-PropertyValue -Object $Item -Name 'error')){return $false}
+    $text=[string](Get-PropertyValue -Object $Item -Name 'text' -Default (Get-PropertyValue -Object $Item -Name 'message'))
+    if([string]::IsNullOrWhiteSpace($text) -or $text -match '(?i)\b(?:tool|policy|approval|schema|turn)\b'){return $false}
+    foreach($pattern in $Patterns){
+        try{if($text -match $pattern){return $true}}
+        catch{Add-Failure "AllowedAdvisoryRegex is invalid: $pattern";return $false}
+    }
+    return $false
+}
 function Test-JsonNesting {
     param([Parameter(Mandatory)][string]$Text,[ValidateRange(1,256)][int]$MaximumDepth=64)
     $depth=0;$quoted=$false;$escaped=$false
@@ -139,10 +153,10 @@ if($JsonlPath -and (Test-Path -LiteralPath $JsonlPath -PathType Leaf)){
             $item=Get-PropertyValue -Object $jsonEvent -Name 'item'
             if($eventType -like 'item.*' -and $null -eq $item){Add-Failure "Item event at line $lineNumber has no item.";continue}
             if($null -eq $item){continue}
-            $itemType=[string](Get-PropertyValue -Object $item -Name 'type');$itemId=[string](Get-PropertyValue -Object $item -Name 'id');$status=([string](Get-PropertyValue -Object $item -Name 'status')).ToLowerInvariant()
+            $itemType=[string](Get-PropertyValue -Object $item -Name 'type');$itemId=[string](Get-PropertyValue -Object $item -Name 'id');$status=([string](Get-PropertyValue -Object $item -Name 'status')).ToLowerInvariant();$allowedAdvisory=Test-AllowedAdvisory -EventType $eventType -Item $item -Status $status -Patterns $AllowedAdvisoryRegex
             if(-not $itemType){Add-Failure "Item event at line $lineNumber has no item type."}
             if($status -in @('failed','error','denied','rejected','cancelled') -or $null -ne(Get-PropertyValue -Object $item -Name 'error')){Add-Failure "Item '$itemType' failed."}
-            if($itemType -match '(?i)(?:^|[._-])(?:error|failure|failed|policy|approval|schema)(?:$|[._-])'){Add-Failure "Failure-class item '$itemType'."}
+            if($itemType -match '(?i)(?:^|[._-])(?:error|failure|failed|policy|approval|schema)(?:$|[._-])' -and -not $allowedAdvisory){Add-Failure "Failure-class item '$itemType'."}
             $isTool=$itemType -in @('command_execution','mcp_tool_call','tool_call','web_search')
             if($isTool){
                 if(-not $turnActive){Add-Failure "Tool event '$itemId' occurred outside an active turn."}

@@ -17,7 +17,7 @@ $ErrorActionPreference='Stop'
 
 function Get-CheckpointSha256 { param([Parameter(Mandatory)][string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
 function Get-CheckpointResumeToken {
-    param([Parameter(Mandatory)][hashtable]$Identity)
+    param([Parameter(Mandatory)][System.Collections.IDictionary]$Identity)
     $sha256=[Security.Cryptography.SHA256]::Create()
     try{$bytes=[Text.Encoding]::UTF8.GetBytes(($Identity|ConvertTo-Json -Depth 8 -Compress));([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-','')}
     finally{$sha256.Dispose()}

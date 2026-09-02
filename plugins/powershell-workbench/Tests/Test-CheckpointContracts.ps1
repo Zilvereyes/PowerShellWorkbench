@@ -17,6 +17,13 @@ try{
     Assert-True -Condition ($created.Checkpoint.ResumeToken -match '^[A-F0-9]{64}$') -Message 'Checkpoint resume token is not a SHA256 value.'
     $valid=& $testCheckpoint -CheckpointPath $checkpointPath
     Assert-True -Condition $valid.Passed -Message 'Fresh checkpoint contract did not validate.'
+    foreach($hostName in @('powershell.exe','pwsh.exe')) {
+        $hostCommand=Get-Command $hostName -ErrorAction SilentlyContinue
+        if($hostCommand) {
+            & $hostCommand.Source -NoProfile -ExecutionPolicy Bypass -File $testCheckpoint -CheckpointPath $checkpointPath
+            Assert-True -Condition ($LASTEXITCODE -eq 0) -Message "Checkpoint contract did not validate in a child $hostName process."
+        }
+    }
     Set-Content -LiteralPath $artifactPath -Value 'drifted artifact' -Encoding UTF8
     $drifted=& $testCheckpoint -CheckpointPath $checkpointPath -NoThrow
     Assert-True -Condition (-not $drifted.Passed) -Message 'Checkpoint validator accepted an artifact with drift.'
