@@ -8,6 +8,10 @@ try{
     $context=& $resolver -Path $tempRoot
     if($context.Profile -ne 'WindowsServicingToolkit'){throw 'Servicing capabilities did not select WindowsServicingToolkit.'}
     if('DISM' -notin $context.NativeTools -or 'Mount' -notin $context.RiskSurfaces){throw 'Servicing inventory is incomplete.'}
+    $boundaryRoot=Join-Path $tempRoot 'BoundaryProject';$sourceRoot=Join-Path $boundaryRoot 'Source';New-Item -ItemType Directory -Path (Join-Path $boundaryRoot '.git'),$sourceRoot -Force|Out-Null
+    Set-Content -LiteralPath (Join-Path $sourceRoot 'Build-Media.ps1') -Value 'dism.exe /Mount-Image /ImageFile:install.wim' -Encoding UTF8
+    $boundaryContext=& $resolver -Path $sourceRoot
+    if($boundaryContext.ProjectRoot -ne $boundaryRoot -or $boundaryContext.ProjectRootEvidence -ne 'RepositoryBoundary:.git' -or $boundaryContext.Profile -ne 'WindowsServicingToolkit' -or $boundaryContext.ProfileEvidence -ne 'Capability:WindowsServicingToolkit'){throw 'Explicit repository boundary did not retain its project root while classifying servicing capabilities.'}
     $collision=Join-Path $tempRoot 'collision.ps1';Set-Content -LiteralPath $collision -Value '$home = "unsafe"' -Encoding UTF8
     $result=& $guard -Path $collision -NoThrow
     if($result.Passed -or $result.Diagnostics[0].Line -ne 1 -or $result.Diagnostics[0].SuggestedReplacement -ne '$homeEntry' -or $result.Diagnostics[0].Message -ne 'Assignment to protected automatic variable ''$home''. Use ''$homeEntry'' instead.'){throw 'Automatic-variable guard did not produce the expected diagnostic.'}

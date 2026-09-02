@@ -26,11 +26,16 @@ if (Test-Path -LiteralPath $desktopBin) {
 
 $npmBin = Join-Path $env:APPDATA 'npm'
 $processArchitecture = if ([Environment]::Is64BitProcess) { 'x64' } else { 'x86' }
+$currentProcessPath = $null
+try { $currentProcessPath = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName } catch { $currentProcessPath = $null }
+$invocationMode = if ($MyInvocation.Line -match '(?i)-encodedcommand') { 'EncodedCommand' } elseif ($MyInvocation.Line -match '(?i)-command') { 'Command' } elseif ($PSCommandPath) { 'FileOrInProcess' } else { 'InteractiveOrHost' }
 $result = [pscustomobject]@{
     SchemaVersion          = '1.0'
     PowerShellEdition      = $PSVersionTable.PSEdition
     PowerShellVersion      = $PSVersionTable.PSVersion.ToString()
     ProcessArchitecture    = $processArchitecture
+    CurrentProcessPath     = $currentProcessPath
+    CurrentHost            = [pscustomobject]@{ Edition = $PSVersionTable.PSEdition; Version = $PSVersionTable.PSVersion.ToString(); Architecture = $processArchitecture; InvocationMode = $invocationMode }
     PathEntries            = @($env:Path -split ';' | Where-Object { $_ })
     Tools                  = @($tools)
     NpmBin                 = $npmBin

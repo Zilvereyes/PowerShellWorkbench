@@ -7,6 +7,7 @@ param(
     [string]$StepId = 'native-command',
     [scriptblock]$Verify,
     [ValidateSet('None','Possible','Expected','Unknown')][string]$MutationIntent = 'Unknown',
+    [ValidateSet('Mount','Commit','BootMedia','RegistryHive','DiskWrite','ACL')][string[]]$RiskSurface = @(),
     [switch]$Rollback,
     [switch]$AnalyzeOnly,
     [switch]$NoThrow
@@ -57,7 +58,8 @@ if($AnalyzeOnly){$timeline.Add('ANALYZE_ONLY process was not started.');Write-Op
         if($exitCode -eq 0){Write-OperatorBlock -State 'FAERDIG' -Message "[$StepId] afsluttet med exit code 0.";$timeline.Add('FAERDIG exit code 0.')}else{Write-OperatorBlock -State 'FEJL' -Message "[$StepId] afsluttet med exit code $exitCode.";$timeline.Add("FEJL exit code $exitCode.")}
     }catch{$executionError=$_.Exception.Message;Write-OperatorBlock -State 'FEJL' -Message "[$StepId] kunne ikke koeres: $executionError";$timeline.Add("FEJL $executionError")}
 }
-$baseResult=[pscustomobject]@{StepId=$StepId;ExitCode=$exitCode;ExecutionError=$executionError;AnalyzeOnly=[bool]$AnalyzeOnly;ProcessStarted=$processStarted;TargetMutation=$false;MutationIntent=$contractMutationIntent}
+$observedTargetMutation=if($AnalyzeOnly){$false}else{$null}
+$baseResult=[pscustomobject]@{StepId=$StepId;ExitCode=$exitCode;ExecutionError=$executionError;AnalyzeOnly=[bool]$AnalyzeOnly;ProcessStarted=$processStarted;ExecutionOccurred=$processStarted;TargetMutation=$observedTargetMutation;MutationIntent=$contractMutationIntent;RiskSurfaces=@($RiskSurface)}
 if(-not $AnalyzeOnly -and -not $executionError -and $exitCode -eq 0){$verified=$true;if($Verify){try{$verified=[bool](& $Verify $baseResult)}catch{$verified=$false;$executionError=$_.Exception.Message}}}
 if($verified){Write-OperatorBlock -State 'VERIFICERET' -Message "[$StepId] post-check bestod.";$timeline.Add('VERIFICERET post-check bestod.')}elseif($Rollback){Write-OperatorBlock -State 'ROLLBACK' -Message "[$StepId] rollback er paakraevet; udfoer kun en eksplicit godkendt rollback-kommando.";$timeline.Add('ROLLBACK requested; no rollback command was executed.')}elseif(-not $AnalyzeOnly){Write-OperatorBlock -State 'FEJL' -Message "[$StepId] blev ikke verificeret.";$timeline.Add('FEJL post-check failed or was not supplied.')}
 $finishedAt=[DateTime]::UtcNow
@@ -75,8 +77,10 @@ $result=[pscustomobject]@{
     Verified=$verified
     AnalyzeOnly=[bool]$AnalyzeOnly
     ProcessStarted=$processStarted
-    TargetMutation=$false
+    ExecutionOccurred=$processStarted
+    TargetMutation=$observedTargetMutation
     MutationIntent=$contractMutationIntent
+    RiskSurfaces=@($RiskSurface)
     ReportsWritten=$true
     TimelinePath=$timelinePath
     ReportPath=$reportPath

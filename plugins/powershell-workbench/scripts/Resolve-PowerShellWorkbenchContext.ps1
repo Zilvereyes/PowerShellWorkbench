@@ -6,20 +6,26 @@ param(
     [ValidateSet('Auto', 'Generic', 'RecoveryToolkit', 'WingetDownloader', 'WindowsServicingToolkit')]
     [string]$RequestedProfile = 'Auto',
 
-    [string]$RegistryPath
+    [string]$RegistryPath,
+
+    [ValidateRange(0, 10)]
+    [int]$MaxDepth = 3,
+
+    [switch]$Fast
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $servicingInventoryCache = @{}
 $directoryScanCache = @{}
-$excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts')
+$excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts', 'Outdated', 'Previous_Working_Snapshots', 'Backup', '_GitRootArchive_')
+$effectiveMaxDepth = if ($Fast) { 1 } else { $MaxDepth }
 
 function Get-DirectoryScan {
     param([string]$Path)
     $resolved = [System.IO.Path]::GetFullPath($Path)
     if ($directoryScanCache.ContainsKey($resolved)) { return $directoryScanCache[$resolved] }
-    $files = @(Get-ChildItem -LiteralPath $resolved -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Where-Object {
+    $files = @(Get-ChildItem -LiteralPath $resolved -File -Recurse -Depth $effectiveMaxDepth -ErrorAction SilentlyContinue | Where-Object {
         $relative = $_.FullName.Substring($resolved.Length).TrimStart([char[]]'\\/')
         -not @($excludedSegments | Where-Object { $relative -match ('(^|[\\/])' + [regex]::Escape($_) + '([\\/]|$)') }).Count
     })
@@ -157,7 +163,8 @@ function Get-ContextResult {
         [psobject]$ServicingInventory,
         [psobject]$DirectoryScan
     )
-    if (-not $ServicingInventory) { $ServicingInventory = Get-ServicingInventory -Path $ProjectRoot }
+    if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $ProjectRoot }
+    if (-not $ServicingInventory) { $ServicingInventory = Get-CachedServicingInventory -Path $ProjectRoot }
     [pscustomobject]@{
         Profile=$ProfileName
         ProjectRoot=$ProjectRoot
@@ -190,7 +197,13 @@ foreach ($root in $ancestors) {
     if ($explicitProfile) {
         $scan = Get-DirectoryScan -Path $root
         $servicing = Get-CachedServicingInventory -Path $root
-        Get-ContextResult -ProfileName $explicitProfile.Profile -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $root -ProfileEvidence $explicitProfile.Evidence -ServicingInventory $servicing -DirectoryScan $scan
+        $profileName = $explicitProfile.Profile
+        $profileEvidence = $explicitProfile.Evidence
+        if ($profileName -eq 'Generic' -and $servicing.Detected) {
+            $profileName = 'WindowsServicingToolkit'
+            $profileEvidence = 'Capability:WindowsServicingToolkit'
+        }
+        Get-ContextResult -ProfileName $profileName -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $explicitProfile.Evidence -ProfileEvidence $profileEvidence -ServicingInventory $servicing -DirectoryScan $scan
         return
     }
 }
