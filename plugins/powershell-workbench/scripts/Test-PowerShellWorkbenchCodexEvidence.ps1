@@ -35,13 +35,13 @@ function Get-PropertyValue { param($Object,[string]$Name,$Default=$null) if($nul
 function Get-LowerHash { param([string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function Add-Failure { param([string]$Message) if($script:failures.Count -lt $script:MaximumFailures){$script:failures.Add($Message)} }
 function Test-AllowedAdvisory {
-    param([string]$EventType,$Item,[string]$Status)
-    if($AllowedAdvisoryRegex.Count -eq 0 -or $EventType -ne 'item.completed' -or [string](Get-PropertyValue -Object $Item -Name 'type') -ne 'error'){return $false}
+    param([string]$EventType,$Item,[string]$Status,[string[]]$Patterns)
+    if($Patterns.Count -eq 0 -or $EventType -ne 'item.completed' -or [string](Get-PropertyValue -Object $Item -Name 'type') -ne 'error'){return $false}
     if($Status -and $Status -notin @('completed','success','succeeded')){return $false}
     if($null -ne (Get-PropertyValue -Object $Item -Name 'error')){return $false}
     $text=[string](Get-PropertyValue -Object $Item -Name 'text' -Default (Get-PropertyValue -Object $Item -Name 'message'))
     if([string]::IsNullOrWhiteSpace($text) -or $text -match '(?i)\b(?:tool|policy|approval|schema|turn)\b'){return $false}
-    foreach($pattern in $AllowedAdvisoryRegex){
+    foreach($pattern in $Patterns){
         try{if($text -match $pattern){return $true}}
         catch{Add-Failure "AllowedAdvisoryRegex is invalid: $pattern";return $false}
     }
@@ -153,7 +153,7 @@ if($JsonlPath -and (Test-Path -LiteralPath $JsonlPath -PathType Leaf)){
             $item=Get-PropertyValue -Object $jsonEvent -Name 'item'
             if($eventType -like 'item.*' -and $null -eq $item){Add-Failure "Item event at line $lineNumber has no item.";continue}
             if($null -eq $item){continue}
-            $itemType=[string](Get-PropertyValue -Object $item -Name 'type');$itemId=[string](Get-PropertyValue -Object $item -Name 'id');$status=([string](Get-PropertyValue -Object $item -Name 'status')).ToLowerInvariant();$allowedAdvisory=Test-AllowedAdvisory -EventType $eventType -Item $item -Status $status
+            $itemType=[string](Get-PropertyValue -Object $item -Name 'type');$itemId=[string](Get-PropertyValue -Object $item -Name 'id');$status=([string](Get-PropertyValue -Object $item -Name 'status')).ToLowerInvariant();$allowedAdvisory=Test-AllowedAdvisory -EventType $eventType -Item $item -Status $status -Patterns $AllowedAdvisoryRegex
             if(-not $itemType){Add-Failure "Item event at line $lineNumber has no item type."}
             if($status -in @('failed','error','denied','rejected','cancelled') -or $null -ne(Get-PropertyValue -Object $item -Name 'error')){Add-Failure "Item '$itemType' failed."}
             if($itemType -match '(?i)(?:^|[._-])(?:error|failure|failed|policy|approval|schema)(?:$|[._-])' -and -not $allowedAdvisory){Add-Failure "Failure-class item '$itemType'."}
