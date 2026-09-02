@@ -156,7 +156,7 @@ public static class FakeCodex {
     public static int Main(string[] args) {
         if (args.Length == 1 && args[0] == "--version") { Console.WriteLine("codex-cli 0.0.0"); return 0; }
         if (args.Length == 3 && args[0] == "debug" && args[1] == "models" && args[2] == "--bundled") {
-            Console.WriteLine("{\"models\":[{\"slug\":\"online-first\",\"display_name\":\"Online first\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":true,\"tool_mode\":\"code_mode_only\",\"multi_agent_version\":\"v2\",\"supports_search_tool\":true},{\"slug\":\"gpt-5.4-mini\",\"display_name\":\"Legacy compatible\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":false,\"supports_search_tool\":false}]}");
+            Console.WriteLine("{\"models\":[{\"slug\":\"online-first\",\"display_name\":\"Online first\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":true,\"tool_mode\":\"code_mode_only\",\"multi_agent_version\":\"v2\",\"service_tier\":\"priority\",\"supports_search_tool\":true},{\"slug\":\"gpt-5.4-mini\",\"display_name\":\"Legacy compatible\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":false,\"service_tiers\":[\"priority\"],\"supports_search_tool\":false}]}");
             return 0;
         }
         if (Environment.GetEnvironmentVariable("PWB_FAKE_TIMEOUT") == "1") { Thread.Sleep(5000); return 0; }
@@ -191,8 +191,25 @@ public static class FakeCodex {
         Assert-True (-not $generatedModel.use_responses_lite) 'Generated local catalog retained Responses Lite.'
         Assert-True ($null -eq $generatedModel.PSObject.Properties['tool_mode']) 'Generated local catalog retained code-mode transport.'
         Assert-True ($null -eq $generatedModel.PSObject.Properties['multi_agent_version']) 'Generated local catalog retained multi-agent transport.'
+        Assert-True ($null -eq $generatedModel.PSObject.Properties['service_tier']) 'Generated local catalog retained a cloud service tier.'
+        Assert-True ($null -eq $generatedModel.PSObject.Properties['service_tiers']) 'Generated local catalog retained cloud service tiers.'
         Assert-True (-not $generatedModel.supports_search_tool) 'Generated local catalog retained search-tool support.'
         Assert-True ($generatedManifest.unassertedCapabilities -contains 'responses-lite') 'Catalog manifest did not record unasserted Responses Lite transport.'
+        Assert-True ($generatedManifest.unassertedCapabilities -contains 'service-tier') 'Catalog manifest did not record unasserted service-tier transport.'
+
+        $originalLocalAppData=$env:LOCALAPPDATA
+        $desktopRoot=Join-Path $tempRoot 'OpenAI\Codex\bin\fixture';New-Item -ItemType Directory -Path $desktopRoot -Force|Out-Null
+        Copy-Item -LiteralPath $fakeCli -Destination (Join-Path $desktopRoot 'codex.exe')
+        try{
+            $env:LOCALAPPDATA=$tempRoot
+            $defaultCatalog=& $catalogGenerator -Model 'qwen3.5:9b' -ContextWindow 131072 -OutputPath (Join-Path $tempRoot 'default-catalog.json')
+            Assert-True ($defaultCatalog.Result -eq 'GENERATED') 'Catalog generator failed when ExpectedCodexSha256 was omitted.'
+            $desktopHash=(Get-FileHash -LiteralPath (Join-Path $desktopRoot 'codex.exe') -Algorithm SHA256).Hash
+            $hashedCatalog=& $catalogGenerator -Model 'qwen3.5:9b' -ContextWindow 131072 -ExpectedCodexSha256 $desktopHash -OutputPath (Join-Path $tempRoot 'hashed-catalog.json')
+            Assert-True ($hashedCatalog.Result -eq 'GENERATED') 'Catalog generator rejected the correct ExpectedCodexSha256.'
+            $wrongHashRejected=$false;try{& $catalogGenerator -Model 'qwen3.5:9b' -ContextWindow 131072 -ExpectedCodexSha256 ('0'*64) -OutputPath (Join-Path $tempRoot 'wrong-hash-catalog.json')|Out-Null}catch{$wrongHashRejected=$true}
+            Assert-True $wrongHashRejected 'Catalog generator accepted an incorrect ExpectedCodexSha256.'
+        }finally{$env:LOCALAPPDATA=$originalLocalAppData}
 
         $env:PWB_FAKE_FLOOD='1'
         try{$limited=& $runner -Prompt 'flood' -ModelId x -ModelDigest x -ProviderId x -Endpoint 'http://127.0.0.1:1' -EffectiveContext 1 -WorkingDirectory $tempRoot -OutputDirectory (Join-Path $tempRoot flood) -CodexPath $fakeCli -MaxStdoutBytes 1024 -MaxStderrBytes 1024 -MaxTotalOutputBytes 2048}

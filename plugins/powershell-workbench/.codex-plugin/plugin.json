@@ -1,6 +1,6 @@
 {
   "name": "powershell-workbench",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Portable PowerShell and mixed-language scaffolding, refactoring, discovery, agent harnesses, game tooling, and opt-in quality workflows.",
   "author": {
     "name": "Zilvereyes"

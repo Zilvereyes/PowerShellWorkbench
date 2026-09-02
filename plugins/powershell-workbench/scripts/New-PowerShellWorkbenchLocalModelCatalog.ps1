@@ -31,7 +31,12 @@ function Test-LocalOllamaTransport {
     if($CatalogModel.PSObject.Properties['supports_search_tool'] -and $CatalogModel.supports_search_tool){$violations.Add('supports_search_tool must be false for a generic local Ollama catalog.')}
     @($violations)
 }
-if(-not $CodexPath){$desktop=& $resolver -ExpectedSha256 $ExpectedCodexSha256;$CodexPath=$desktop.Path}else{$CodexPath=(Resolve-Path -LiteralPath $CodexPath).Path}
+if(-not $CodexPath){
+    $resolverArguments=@{}
+    if(-not [string]::IsNullOrWhiteSpace($ExpectedCodexSha256)){$resolverArguments.ExpectedSha256=$ExpectedCodexSha256}
+    $desktop=& $resolver @resolverArguments
+    $CodexPath=$desktop.Path
+}else{$CodexPath=(Resolve-Path -LiteralPath $CodexPath).Path}
 $codexVersion=Get-CodexVersion -Path $CodexPath
 $codexSha256=(Get-FileHash -LiteralPath $CodexPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if($ExpectedCodexSha256 -and $codexSha256 -ne $ExpectedCodexSha256.ToLowerInvariant()){throw 'Codex SHA256 does not match ExpectedCodexSha256.'}
@@ -58,7 +63,7 @@ foreach($property in @('upgrade','retirement','availability_nux','comp_hash')){i
 if($localModel.PSObject.Properties.Name -contains 'default_reasoning_level'){$localModel.default_reasoning_level=$null}
 if($localModel.PSObject.Properties.Name -contains 'supported_reasoning_levels'){$localModel.supported_reasoning_levels=@()}
 if($localModel.PSObject.Properties.Name -contains 'additional_speed_tiers'){$localModel.additional_speed_tiers=@()}
-if($localModel.PSObject.Properties.Name -contains 'service_tiers'){$localModel.service_tiers=@()}
+foreach($property in @('service_tier','service_tiers')){if($localModel.PSObject.Properties.Name -contains $property){$localModel.PSObject.Properties.Remove($property)}}
 if($localModel.PSObject.Properties.Name -contains 'input_modalities'){$localModel.input_modalities=@()}
 if($localModel.PSObject.Properties.Name -contains 'experimental_supported_tools'){$localModel.experimental_supported_tools=@()}
 foreach($property in @('supports_image_detail_original','supports_search_tool')){if($localModel.PSObject.Properties.Name -contains $property){$localModel.$property=$false}}
@@ -79,5 +84,5 @@ if($transportViolations.Count -gt 0){throw "Generated local catalog failed the O
 $effectiveTransport=Get-TransportSnapshot -CatalogModel $serializedLocal
 $catalogSha256=(Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifestPath="$OutputPath.manifest.json"
-[ordered]@{schemaVersion='1.1';generatedAtUtc=[DateTime]::UtcNow.ToString('o');model=$Model;contextWindow=$ContextWindow;codexPath=$CodexPath;codexVersion=$codexVersion;codexSha256=$codexSha256;baseModelSlug=[string]$baseModel.slug;bundledCatalogSha256=([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($bundledText)))).Replace('-','').ToLowerInvariant();catalogPath=$OutputPath;catalogSha256=$catalogSha256;transport=[ordered]@{base=$baseTransport;effective=$effectiveTransport;overrides=@('use_responses_lite=false when present','tool_mode removed when present','multi_agent_version removed when present','supports_search_tool=false when present')};unassertedCapabilities=@('reasoning-levels','speed-tiers','input-modalities','responses-lite','tool-mode','multi-agent-version','search-tool')}|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+[ordered]@{schemaVersion='1.1';generatedAtUtc=[DateTime]::UtcNow.ToString('o');model=$Model;contextWindow=$ContextWindow;codexPath=$CodexPath;codexVersion=$codexVersion;codexSha256=$codexSha256;baseModelSlug=[string]$baseModel.slug;bundledCatalogSha256=([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($bundledText)))).Replace('-','').ToLowerInvariant();catalogPath=$OutputPath;catalogSha256=$catalogSha256;transport=[ordered]@{base=$baseTransport;effective=$effectiveTransport;overrides=@('use_responses_lite=false when present','tool_mode removed when present','multi_agent_version removed when present','service_tier/service_tiers removed when present','supports_search_tool=false when present')};unassertedCapabilities=@('reasoning-levels','speed-tiers','service-tier','input-modalities','responses-lite','tool-mode','multi-agent-version','search-tool')}|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
 [pscustomobject]@{Result='GENERATED';Model=$Model;ContextWindow=$ContextWindow;CodexPath=$CodexPath;CodexVersion=$codexVersion;CodexSha256=$codexSha256;CatalogPath=$OutputPath;CatalogSha256=$catalogSha256;ManifestPath=$manifestPath}
