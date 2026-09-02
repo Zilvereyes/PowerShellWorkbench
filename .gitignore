@@ -3,6 +3,8 @@
 tmp/
 artifacts/
 TestResults/
+megalinter-reports/
+mega-linter.log
 
 # Editor and operating-system files
 .DS_Store

@@ -4,11 +4,7 @@ PowerShell Workbench is a portable Codex plugin for PowerShell-centered and mixe
 
 ## Windows prerequisite
 
-`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. On Windows, the supported standalone installer does not require Node.js or npm:
-
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
-```
+`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. Follow the current official instructions at https://developers.openai.com/codex/cli. Avoid piping downloaded scripts directly into `Invoke-Expression`; authenticate installation artifacts before execution.
 
 Open a new PowerShell window and verify:
 
@@ -21,10 +17,11 @@ Adding `%APPDATA%\npm` to `PATH` does not install npm or Codex.
 
 ## Install from GitHub
 
-On each laptop, authenticate Git for GitHub access and run:
+On each laptop, authenticate Git for GitHub access and select a reviewed immutable release tag or commit:
 
 ```powershell
-codex plugin marketplace add Zilvereyes/PowerShellWorkbench --ref main
+$PluginRef = '<reviewed-release-tag-or-full-commit>'
+codex plugin marketplace add Zilvereyes/PowerShellWorkbench --ref $PluginRef
 codex plugin add powershell-workbench@powershell-workbench
 ```
 
@@ -44,6 +41,7 @@ Then start a new Codex task.
 
 - Scaffold scripts, advanced functions, modules, manifests, tests, contracts, documentation, lint configuration, and CI files.
 - Refactor PowerShell while preserving behavior, compatibility, exports, and safety boundaries.
+- Make precise, low-churn edits to compact or generated code when normal patch context is fragile.
 - Discover mixed-language project context without embedding workstation-specific paths.
 - Apply RecoveryToolkit and WingetDownloader conventions when those projects are detected.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
@@ -51,25 +49,28 @@ Then start a new Codex task.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
+- Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
 
 ## Bounded Codex JSONL evidence
 
-PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, applies a timeout, terminates the process tree on timeout, and stores stdout JSONL, stderr, and bound run metadata.
+PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, streams stdout and stderr into byte-bounded files, terminates the process tree on timeout or output overflow, and records executable plus artifact hashes.
 
-Validation fails closed on process or tool failures, `error`/`failed` events, policy, approval, or schema failures, malformed or empty JSONL, insufficient successful tool calls, unexpected final text, and optionally repeated tool-call fingerprints. Process exit code `0` and a plausible final agent message are never sufficient by themselves.
+Validation fails closed on artifact or executable substitution, process/tool failures, orphaned or duplicate tool events, missing success state, excessive or malformed JSONL, incomplete turn lifecycle, insufficient tool calls, unexpected final text, and optionally retries. Model, provider, endpoint, and context remain explicitly unverified caller declarations unless a future provider supplies trusted attestation.
 
 ```powershell
 $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
     -Prompt 'Use one read-only tool, then return EXACT_OK.' `
     -ModelId 'model-name' `
     -ModelDigest 'verified-model-digest' `
-    -DigestVerified `
     -ProviderId 'local-provider' `
     -Endpoint 'http://127.0.0.1:11434' `
     -EffectiveContext 131072
 
 & '<plugin-root>\scripts\Test-PowerShellWorkbenchCodexEvidence.ps1' `
     -MetadataPath $capture.MetadataPath `
+    -ExpectedMetadataSha256 '<independently-recorded-metadata-sha256>' `
+    -ExpectedExecutableSha256 '<independently-pinned-codex-executable-sha256>' `
+    -AcceptUnverifiedRuntimeDeclarations `
     -MinimumSuccessfulToolCalls 1 `
     -ExpectedFinalText 'EXACT_OK' `
     -RequireExactFinalText

@@ -27,7 +27,7 @@ Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'skills') -Filter 'SKILL.md' -
 @(Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'Tests') -Filter '*.ps1' -File -Recurse -ErrorAction SilentlyContinue) | ForEach-Object {
     $tokens=$null; $errors=$null
     [void][Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors)
-    foreach($error in @($errors)) { $failures.Add("Parser error in $($_.Name): $($error.Message)") }
+    foreach($parseError in @($errors)) { $failures.Add("Parser error in $($_.Name): $($parseError.Message)") }
 }
 
 if ($failures.Count) { $failures | ForEach-Object { Write-Error $_ }; exit 1 }

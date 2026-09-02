@@ -1,7 +1,7 @@
 {
   "name": "powershell-workbench",
-  "version": "0.3.0+codex.20260902122223",
-  "description": "Portable PowerShell scaffolding, refactoring, portfolio discovery, environment diagnostics, agent harnesses, and opt-in quality workflows.",
+  "version": "0.4.0+codex.20260902134535",
+  "description": "Portable PowerShell and mixed-language scaffolding, refactoring, discovery, agent harnesses, game tooling, and opt-in quality workflows.",
   "author": {
     "name": "Zilvereyes"
   },
@@ -18,9 +18,7 @@
     ],
     "defaultPrompt": [
       "Create a dual-compatible PowerShell function.",
-      "Map and improve this PowerShell-centered project.",
-      "Inventory this PowerShell-centered project portfolio.",
-      "Diagnose this workstation's PowerShell and Codex toolchain.",
+      "Safely edit this compact PowerShell file with minimal churn.",
       "Run the PowerShell quality gate."
     ]
   }

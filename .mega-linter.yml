@@ -1,0 +1,15 @@
+---
+MEGALINTER_FLAVOR: all
+MEGALINTER_VERSION: v10
+APPLY_FIXES: none
+ENABLE:
+  - POWERSHELL
+  - MARKDOWN
+  - JSON
+  - YAML
+DISABLE:
+  - COPYPASTE
+  - SPELL
+FILTER_REGEX_EXCLUDE: '(^|[\/])(.git|vendor|generated|node_modules|megalinter-reports)([\/]|$)'
+PRINT_ALL_FILES: false
+SHOW_ELAPSED_TIME: true
