@@ -52,22 +52,23 @@ Then start a new Codex task.
 
 ## Bounded Codex JSONL evidence
 
-PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, applies a timeout, terminates the process tree on timeout, and stores stdout JSONL, stderr, and bound run metadata.
+PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, streams stdout and stderr into byte-bounded files, terminates the process tree on timeout or output overflow, and records executable plus artifact hashes.
 
-Validation fails closed on process or tool failures, `error`/`failed` events, policy, approval, or schema failures, malformed or empty JSONL, insufficient successful tool calls, unexpected final text, and optionally repeated tool-call fingerprints. Process exit code `0` and a plausible final agent message are never sufficient by themselves.
+Validation fails closed on artifact or executable substitution, process/tool failures, orphaned or duplicate tool events, missing success state, excessive or malformed JSONL, incomplete turn lifecycle, insufficient tool calls, unexpected final text, and optionally retries. Model, provider, endpoint, and context remain explicitly unverified caller declarations unless a future provider supplies trusted attestation.
 
 ```powershell
 $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
     -Prompt 'Use one read-only tool, then return EXACT_OK.' `
     -ModelId 'model-name' `
     -ModelDigest 'verified-model-digest' `
-    -DigestVerified `
     -ProviderId 'local-provider' `
     -Endpoint 'http://127.0.0.1:11434' `
     -EffectiveContext 131072
 
 & '<plugin-root>\scripts\Test-PowerShellWorkbenchCodexEvidence.ps1' `
     -MetadataPath $capture.MetadataPath `
+    -ExpectedExecutableSha256 '<independently-pinned-codex-executable-sha256>' `
+    -AcceptUnverifiedRuntimeDeclarations `
     -MinimumSuccessfulToolCalls 1 `
     -ExpectedFinalText 'EXACT_OK' `
     -RequireExactFinalText

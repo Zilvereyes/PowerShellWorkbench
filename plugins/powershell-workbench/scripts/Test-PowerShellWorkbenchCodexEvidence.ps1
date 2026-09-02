@@ -1,127 +1,149 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
-    [string]$MetadataPath,
-
+    [Parameter(Mandatory)][string]$MetadataPath,
+    [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedExecutableSha256,
     [string]$JsonlPath,
-
-    [ValidateRange(0, 100000)]
-    [int]$MinimumSuccessfulToolCalls = 0,
-
-    [AllowEmptyString()]
-    [string]$ExpectedFinalText,
-
+    [ValidateRange(0, 100000)][int]$MinimumSuccessfulToolCalls = 0,
+    [AllowEmptyString()][string]$ExpectedFinalText,
     [switch]$RequireExactFinalText,
-
     [switch]$FailOnToolRetry,
-
     [switch]$AllowRemoteEndpointEvidence,
-
+    [switch]$AcceptUnverifiedRuntimeDeclarations,
+    [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedMetadataSha256,
+    [ValidateRange(1024, 10485760)][long]$MaxMetadataBytes = 1048576,
+    [ValidateRange(1024, 1073741824)][long]$MaxJsonlBytes = 52428800,
+    [ValidateRange(1024, 1073741824)][long]$MaxStderrBytes = 10485760,
+    [ValidateRange(2048, 2147483648)][long]$MaxTotalArtifactBytes = 62914560,
+    [ValidateRange(256, 10485760)][int]$MaxLineCharacters = 1048576,
+    [ValidateRange(1, 1000000)][int]$MaxEvents = 100000,
+    [ValidateRange(1, 10000)][int]$MaxFailures = 100,
     [switch]$NoThrow,
-
     [switch]$AsJson
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
-
-function Get-PropertyValue {
-    param($Object, [string]$Name, $Default = $null)
-    if ($null -eq $Object) { return $Default }
-    $property = $Object.PSObject.Properties[$Name]
-    if ($null -eq $property) { return $Default }
-    return $property.Value
+function Get-PropertyValue { param($Object,[string]$Name,$Default=$null) if($null -eq $Object){return $Default};$p=$Object.PSObject.Properties[$Name];if($null -eq $p){return $Default};$p.Value }
+function Get-LowerHash { param([string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
+function Add-Failure { param([string]$Message) if($script:failures.Count -lt $MaxFailures){$script:failures.Add($Message)} }
+function Test-JsonNesting {
+    param([Parameter(Mandatory)][string]$Text,[ValidateRange(1,256)][int]$MaximumDepth=64)
+    $depth=0;$quoted=$false;$escaped=$false
+    foreach($character in $Text.ToCharArray()){
+        if($escaped){$escaped=$false;continue}
+        if($quoted -and $character -eq '\'){$escaped=$true;continue}
+        if($character -eq '"'){$quoted=-not $quoted;continue}
+        if(-not $quoted -and $character -in @('{','[')){$depth++;if($depth -gt $MaximumDepth){return $false}}
+        elseif(-not $quoted -and $character -in @('}',']')){$depth--;if($depth -lt 0){return $false}}
+    }
+    return $depth -eq 0 -and -not $quoted -and -not $escaped
 }
 
 $failures = New-Object System.Collections.Generic.List[string]
-try { $metadata = Get-Content -LiteralPath (Resolve-Path -LiteralPath $MetadataPath) -Raw | ConvertFrom-Json }
-catch { throw "Metadata is unavailable or invalid JSON: $($_.Exception.Message)" }
+$metadataPathResolved = (Resolve-Path -LiteralPath $MetadataPath).Path
+if((Get-Item -LiteralPath $metadataPathResolved).Length -gt $MaxMetadataBytes){throw 'Metadata exceeds MaxMetadataBytes.'}
+$metadataText=[IO.File]::ReadAllText($metadataPathResolved)
+if(-not (Test-JsonNesting -Text $metadataText)){throw 'Metadata JSON exceeds the nesting limit or is structurally incomplete.'}
+try{$metadata=$metadataText|ConvertFrom-Json}catch{throw "Metadata is invalid JSON: $($_.Exception.Message)"}
+if((Get-LowerHash $metadataPathResolved) -ne $ExpectedMetadataSha256.ToLowerInvariant()){Add-Failure 'Metadata SHA256 does not match the expected out-of-band digest.'}
+if((Get-PropertyValue $metadata 'schemaVersion') -ne '2.0'){Add-Failure 'metadata.schemaVersion must be 2.0.'}
+if((Get-PropertyValue $metadata 'timedOut' $true) -ne $false){Add-Failure 'The process timed out.'}
+if((Get-PropertyValue $metadata 'outputLimitExceeded' $true) -ne $false){Add-Failure 'The process exceeded an output limit.'}
+if((Get-PropertyValue $metadata 'captureStatus') -ne 'Completed'){Add-Failure 'Capture status is not Completed.'}
+if((Get-PropertyValue $metadata 'processExitCode' -1) -ne 0){Add-Failure 'Process exit code is not zero.'}
 
-if ((Get-PropertyValue $metadata 'schemaVersion') -ne '1.0') { $failures.Add('metadata.schemaVersion must be 1.0.') }
-if ((Get-PropertyValue $metadata 'timedOut' $true) -ne $false) { $failures.Add('The process timed out.') }
-if ((Get-PropertyValue $metadata 'captureStatus') -ne 'Completed') { $failures.Add('Capture status is not Completed.') }
-if ((Get-PropertyValue $metadata 'processExitCode' -1) -ne 0) { $failures.Add('Process exit code is not zero.') }
-if (-not (Get-PropertyValue (Get-PropertyValue $metadata 'model') 'id')) { $failures.Add('Model id is missing.') }
-if (-not (Get-PropertyValue (Get-PropertyValue $metadata 'model') 'digest')) { $failures.Add('Model digest is missing.') }
-if ((Get-PropertyValue (Get-PropertyValue $metadata 'model') 'digestVerified' $false) -ne $true) { $failures.Add('Model digest is not verified.') }
-if (-not (Get-PropertyValue (Get-PropertyValue $metadata 'provider') 'id')) { $failures.Add('Provider id is missing.') }
-if (-not (Get-PropertyValue (Get-PropertyValue $metadata 'provider') 'endpoint')) { $failures.Add('Provider endpoint is missing.') }
-if (-not $AllowRemoteEndpointEvidence -and (Get-PropertyValue (Get-PropertyValue $metadata 'provider') 'isLoopback' $false) -ne $true) { $failures.Add('Provider endpoint evidence is not loopback.') }
-$runtime = Get-PropertyValue $metadata 'runtime'
-foreach ($field in @('effectiveContext','sandbox','approvalPolicy','profile')) {
-    if ($null -eq (Get-PropertyValue $runtime $field)) { $failures.Add("runtime.$field is missing.") }
+$launch=Get-PropertyValue $metadata 'launch'
+$executablePath=[string](Get-PropertyValue $launch 'executablePath')
+if(-not $executablePath -or -not(Test-Path -LiteralPath $executablePath -PathType Leaf)){Add-Failure 'Recorded executable is unavailable.'}
+else{
+    $observedExecutableHash=Get-LowerHash $executablePath
+    if($observedExecutableHash -ne ([string](Get-PropertyValue $launch 'executableSha256')).ToLowerInvariant()){Add-Failure 'Executable changed after capture.'}
+    if($observedExecutableHash -ne $ExpectedExecutableSha256.ToLowerInvariant()){Add-Failure 'Executable does not match the independently expected SHA256.'}
 }
-$inputEvidence = Get-PropertyValue $metadata 'input'
-if (-not (Get-PropertyValue $inputEvidence 'promptSha256')) { $failures.Add('Prompt SHA256 is missing.') }
-if (-not (Get-PropertyValue $metadata 'startedAt')) { $failures.Add('Start time is missing.') }
-if ([double](Get-PropertyValue $metadata 'durationMs' -1) -lt 0) { $failures.Add('Duration is missing or negative.') }
+$declarations=Get-PropertyValue $metadata 'declarations'
+if((Get-PropertyValue $declarations 'attestation') -ne 'unverified-caller-declaration'){Add-Failure 'Runtime declaration state is missing or unknown.'}
+if(-not $AcceptUnverifiedRuntimeDeclarations){Add-Failure 'Runtime model/provider/context declarations are not independently attested.'}
+$provider=Get-PropertyValue $declarations 'provider'
+$providerEndpoint=[string](Get-PropertyValue $provider 'endpoint')
+$derivedLoopback=$false
+try{$providerUri=[uri]$providerEndpoint;$derivedLoopback=$providerUri.DnsSafeHost.ToLowerInvariant() -in @('localhost','127.0.0.1','::1','[::1]')}catch{Add-Failure 'Declared provider endpoint is not a valid URI.'}
+if(-not $AllowRemoteEndpointEvidence -and -not $derivedLoopback){Add-Failure 'Provider endpoint is not loopback.'}
 
-if (-not $JsonlPath) { $JsonlPath = Get-PropertyValue (Get-PropertyValue $metadata 'artifacts') 'stdoutJsonl' }
-if (-not $JsonlPath -or -not (Test-Path -LiteralPath $JsonlPath -PathType Leaf)) { $failures.Add('JSONL artifact is missing.') }
+$artifacts=Get-PropertyValue $metadata 'artifacts'
+$totalArtifactBytes=[long]0
+$recordedJsonl=[string](Get-PropertyValue $artifacts 'stdoutJsonl')
+if(-not $JsonlPath){$JsonlPath=$recordedJsonl}
+if($JsonlPath -and $recordedJsonl -and [IO.Path]::GetFullPath($JsonlPath) -ne [IO.Path]::GetFullPath($recordedJsonl)){Add-Failure 'JsonlPath does not match the captured artifact path.'}
+foreach($artifactName in @('stdout','stderr')){
+    $pathProperty=if($artifactName -eq 'stdout'){'stdoutJsonl'}else{'stderr'}
+    $path=[string](Get-PropertyValue $artifacts $pathProperty)
+    if(-not $path -or -not(Test-Path -LiteralPath $path -PathType Leaf)){Add-Failure "$artifactName artifact is missing.";continue}
+    $actualBytes=[long](Get-Item -LiteralPath $path).Length
+    $artifactLimit=if($artifactName -eq 'stdout'){$MaxJsonlBytes}else{$MaxStderrBytes}
+    if($actualBytes -gt $artifactLimit){Add-Failure "$artifactName artifact exceeds its validator-side byte limit.";continue}
+    $totalArtifactBytes+=$actualBytes
+    $expectedHash=[string](Get-PropertyValue $artifacts ($artifactName+'Sha256'))
+    $expectedBytes=[long](Get-PropertyValue $artifacts ($artifactName+'Bytes') -1)
+    if($actualBytes -ne $expectedBytes){Add-Failure "$artifactName byte length does not match metadata."}
+    if(-not $expectedHash -or (Get-LowerHash $path) -ne $expectedHash.ToLowerInvariant()){Add-Failure "$artifactName SHA256 does not match metadata."}
+}
+if($totalArtifactBytes -gt $MaxTotalArtifactBytes){Add-Failure 'Captured artifacts exceed MaxTotalArtifactBytes.'}
 
-$events = New-Object System.Collections.Generic.List[object]
-$successfulToolCalls = 0
-$finalText = $null
-$toolAttempts = @{}
-if ($JsonlPath -and (Test-Path -LiteralPath $JsonlPath -PathType Leaf)) {
-    $lines = @(Get-Content -LiteralPath $JsonlPath)
-    if (-not @($lines | Where-Object { $_.Trim() }).Count) { $failures.Add('JSONL output is empty.') }
-    $lineNumber = 0
-    foreach ($line in $lines) {
-        $lineNumber++
-        if (-not $line.Trim()) { continue }
-        try { $event = $line | ConvertFrom-Json }
-        catch { $failures.Add("Malformed JSONL at line $lineNumber."); continue }
-        $events.Add($event)
-        $eventType = [string](Get-PropertyValue $event 'type')
-        if (-not $eventType) { $failures.Add("Event at line $lineNumber has no type."); continue }
-        if ($eventType -match '(^|\.)(error|failed)$') { $failures.Add("Failure event '$eventType' at line $lineNumber.") }
-        if ($null -ne (Get-PropertyValue $event 'error')) { $failures.Add("Event error at line $lineNumber.") }
-
-        $item = Get-PropertyValue $event 'item'
-        if ($eventType -like 'item.*' -and $null -eq $item) { $failures.Add("Item event at line $lineNumber has no item."); continue }
-        if ($null -eq $item) { continue }
-        $itemType = [string](Get-PropertyValue $item 'type')
-        $status = ([string](Get-PropertyValue $item 'status')).ToLowerInvariant()
-        if (-not $itemType) { $failures.Add("Item event at line $lineNumber has no item type.") }
-        if ($status -in @('failed','error','denied','rejected','cancelled')) { $failures.Add("Item '$itemType' has failure status '$status'.") }
-        if ($itemType -match '(policy.*(violation|failure|error)|approval_request|approval.*(denied|failure|error)|schema.*(failure|error))') { $failures.Add("Authority or schema failure item '$itemType'.") }
-        if ($null -ne (Get-PropertyValue $item 'error')) { $failures.Add("Item '$itemType' contains an error.") }
-        $exitCode = Get-PropertyValue $item 'exit_code' (Get-PropertyValue $item 'exitCode')
-        if ($null -ne $exitCode -and [int]$exitCode -ne 0) { $failures.Add("Tool '$itemType' has exit code $exitCode.") }
-
-        $isTool = $itemType -in @('command_execution','mcp_tool_call','tool_call','web_search')
-        if ($isTool -and $eventType -eq 'item.started') {
-            $identity = @(
-                $itemType,
-                [string](Get-PropertyValue $item 'command'),
-                [string](Get-PropertyValue $item 'name'),
-                [string](Get-PropertyValue $item 'tool')
-            ) -join '|'
-            if (-not $toolAttempts.ContainsKey($identity)) { $toolAttempts[$identity] = 0 }
-            $toolAttempts[$identity]++
+$successfulToolCalls=0;$finalText=$null;$toolAttempts=@{};$startedTools=@{};$completedTools=@{};$eventCount=0;$turnActive=$false;$turnCompleted=$false
+if($JsonlPath -and (Test-Path -LiteralPath $JsonlPath -PathType Leaf)){
+    if((Get-Item -LiteralPath $JsonlPath).Length -gt $MaxJsonlBytes){Add-Failure 'JSONL artifact exceeds MaxJsonlBytes.'}
+    else{
+        $lineNumber=0
+        foreach($line in [IO.File]::ReadLines((Resolve-Path -LiteralPath $JsonlPath).Path)){
+            $lineNumber++;if(-not $line.Trim()){continue}
+            if($line.Length -gt $MaxLineCharacters){Add-Failure "JSONL line $lineNumber exceeds MaxLineCharacters.";break}
+            if(-not (Test-JsonNesting -Text $line)){Add-Failure "JSONL line $lineNumber exceeds the nesting limit or is structurally incomplete.";continue}
+            try{$event=$line|ConvertFrom-Json}catch{Add-Failure "Malformed JSONL at line $lineNumber.";continue}
+            $eventCount++;if($eventCount -gt $MaxEvents){Add-Failure 'JSONL event count exceeds MaxEvents.';break}
+            $eventType=[string](Get-PropertyValue $event 'type')
+            if(-not $eventType){Add-Failure "Event at line $lineNumber has no type.";continue}
+            if($eventType -match '(^|\.)(error|failed)$' -or $null -ne(Get-PropertyValue $event 'error')){Add-Failure "Failure event at line $lineNumber."}
+            if($eventType -eq 'turn.started'){if($turnActive){Add-Failure 'A turn started before the previous turn completed.'};$turnActive=$true}
+            if($eventType -eq 'turn.completed'){if(-not $turnActive){Add-Failure 'A turn completed without a matching start.'};$turnActive=$false;$turnCompleted=$true}
+            $item=Get-PropertyValue $event 'item'
+            if($eventType -like 'item.*' -and $null -eq $item){Add-Failure "Item event at line $lineNumber has no item.";continue}
+            if($null -eq $item){continue}
+            $itemType=[string](Get-PropertyValue $item 'type');$itemId=[string](Get-PropertyValue $item 'id');$status=([string](Get-PropertyValue $item 'status')).ToLowerInvariant()
+            if(-not $itemType){Add-Failure "Item event at line $lineNumber has no item type."}
+            if($status -in @('failed','error','denied','rejected','cancelled') -or $null -ne(Get-PropertyValue $item 'error')){Add-Failure "Item '$itemType' failed."}
+            if($itemType -match '(policy.*(violation|failure|error)|approval_request|approval.*(denied|failure|error)|schema.*(failure|error))'){Add-Failure "Authority or schema failure item '$itemType'."}
+            $isTool=$itemType -in @('command_execution','mcp_tool_call','tool_call','web_search')
+            if($isTool){
+                if(-not $turnActive){Add-Failure "Tool event '$itemId' occurred outside an active turn."}
+                if(-not $itemId){Add-Failure "Tool event at line $lineNumber has no id.";continue}
+                $identity=@($itemType,[string](Get-PropertyValue $item 'command'),[string](Get-PropertyValue $item 'name'),[string](Get-PropertyValue $item 'tool'))-join '|'
+                if($eventType -eq 'item.started'){
+                    if($startedTools.ContainsKey($itemId) -or $completedTools.ContainsKey($itemId)){Add-Failure "Duplicate tool start '$itemId'.";continue}
+                    $startedTools[$itemId]=$itemType
+                    if(-not $toolAttempts.ContainsKey($identity)){$toolAttempts[$identity]=0};$toolAttempts[$identity]++
+                }elseif($eventType -eq 'item.completed'){
+                    if($completedTools.ContainsKey($itemId)){Add-Failure "Duplicate tool completion '$itemId'.";continue}
+                    if(-not $startedTools.ContainsKey($itemId) -or $startedTools[$itemId] -ne $itemType){Add-Failure "Tool '$itemId' completed without a matching start.";continue}
+                    if($status -notin @('completed','success','succeeded')){Add-Failure "Tool '$itemId' has no explicit success status.";continue}
+                    $exitCode=Get-PropertyValue $item 'exit_code' (Get-PropertyValue $item 'exitCode')
+                    if($itemType -eq 'command_execution' -and ($null -eq $exitCode -or [int]$exitCode -ne 0)){Add-Failure "Command tool '$itemId' has no explicit zero exit code.";continue}
+                    $successfulToolCalls++;$startedTools.Remove($itemId);$completedTools[$itemId]=$true
+                }
+            }
+            if($eventType -eq 'item.completed' -and $itemType -eq 'agent_message'){
+                if(-not $turnActive){Add-Failure 'Agent message completed outside an active turn.'}
+                else{$finalText=[string](Get-PropertyValue $item 'text')}
+            }
         }
-        if ($isTool -and $eventType -eq 'item.completed' -and $status -notin @('failed','error','denied','rejected','cancelled') -and ($null -eq $exitCode -or [int]$exitCode -eq 0)) {
-            $successfulToolCalls++
-        }
-        if ($eventType -eq 'item.completed' -and $itemType -eq 'agent_message') { $finalText = [string](Get-PropertyValue $item 'text') }
+        if($eventCount -eq 0){Add-Failure 'JSONL output is empty.'}
     }
 }
+if($startedTools.Count -gt 0){Add-Failure 'One or more tool calls never completed.'}
+if($turnActive -or -not $turnCompleted){Add-Failure 'No complete turn lifecycle was recorded.'}
+if($FailOnToolRetry -and @($toolAttempts.GetEnumerator()|Where-Object Value -gt 1).Count -gt 0){Add-Failure 'A tool fingerprint was attempted more than once.'}
+if($successfulToolCalls -lt $MinimumSuccessfulToolCalls){Add-Failure "Successful tool calls $successfulToolCalls is below required minimum $MinimumSuccessfulToolCalls."}
+if($RequireExactFinalText -and $finalText -cne $ExpectedFinalText){Add-Failure 'Final agent text does not exactly match expected text.'}
 
-if ($FailOnToolRetry -and @($toolAttempts.GetEnumerator() | Where-Object Value -gt 1).Count -gt 0) { $failures.Add('A tool call fingerprint was attempted more than once.') }
-if ($successfulToolCalls -lt $MinimumSuccessfulToolCalls) { $failures.Add("Successful tool calls $successfulToolCalls is below required minimum $MinimumSuccessfulToolCalls.") }
-if ($RequireExactFinalText -and $finalText -cne $ExpectedFinalText) { $failures.Add('Final agent text does not exactly match the expected text.') }
-
-$result = [pscustomobject]@{
-    SchemaVersion = '1.0'
-    Passed = $failures.Count -eq 0
-    FailureCount = $failures.Count
-    Failures = @($failures)
-    EventCount = $events.Count
-    SuccessfulToolCalls = $successfulToolCalls
-    FinalText = $finalText
-    MetadataPath = (Resolve-Path -LiteralPath $MetadataPath).Path
-    JsonlPath = if ($JsonlPath -and (Test-Path -LiteralPath $JsonlPath)) { (Resolve-Path -LiteralPath $JsonlPath).Path } else { $JsonlPath }
-}
-if ($AsJson) { $result | ConvertTo-Json -Depth 6 } else { $result }
-if (-not $result.Passed -and -not $NoThrow) { throw "Codex JSONL evidence failed validation: $($failures -join ' ')" }
+$result=[pscustomobject]@{SchemaVersion='2.0';Passed=$failures.Count -eq 0;FailureCount=$failures.Count;Failures=@($failures);EventCount=$eventCount;SuccessfulToolCalls=$successfulToolCalls;FinalText=$finalText;RuntimeAttested=$false;MetadataIntegrity='out-of-band-digest';MetadataPath=$metadataPathResolved;JsonlPath=$JsonlPath}
+if($AsJson){$result|ConvertTo-Json -Depth 6}else{$result}
+if(-not $result.Passed -and -not $NoThrow){throw "Codex JSONL evidence failed validation: $($failures -join ' ')"}
