@@ -6,6 +6,8 @@ $ErrorActionPreference = 'Stop'
 $pluginRoot = Split-Path -Parent $PSScriptRoot
 $validator = Join-Path $pluginRoot 'scripts\Test-PowerShellWorkbenchCodexEvidence.ps1'
 $runner = Join-Path $pluginRoot 'scripts\Invoke-PowerShellWorkbenchCodexJson.ps1'
+$desktopResolver = Join-Path $pluginRoot 'scripts\Resolve-PowerShellWorkbenchCodexDesktop.ps1'
+$catalogGenerator = Join-Path $pluginRoot 'scripts\New-PowerShellWorkbenchLocalModelCatalog.ps1'
 $providerTemplate = Join-Path $pluginRoot 'skills\powershell-agent-harness-development\assets\templates\provider-switch-transaction.ps1.tmpl'
 $fixtures = Join-Path $PSScriptRoot 'Fixtures'
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('powershell-workbench-agent-harness-' + [guid]::NewGuid().ToString('N'))
@@ -63,6 +65,9 @@ try {
     $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success) -Parameters @{ExpectedExecutableSha256=('0'*64)}
     Assert-True (-not $result.Passed) 'Executable substitution produced a false positive.'
 
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success) -Parameters @{ExpectedModelId='different-model';ExpectedModelDigest='different-digest';ExpectedEffectiveContext=1;ExpectedCatalogSha256=('0'*64)}
+    Assert-True (-not $result.Passed) 'Model, context, or catalog substitution produced a false positive.'
+
     $tampered=Join-Path $tempRoot 'tampered.jsonl'
     Copy-Item -LiteralPath $success -Destination $tampered
     $metadataPath=New-EvidenceFixture $tampered
@@ -117,8 +122,14 @@ try {
     $tokens=$null;$errors=$null
     $runnerAst=[Management.Automation.Language.Parser]::ParseFile($runner,[ref]$tokens,[ref]$errors)
     Assert-True (@($errors).Count -eq 0) 'Runner has parser errors.'
-    foreach($required in @('ArgumentList','StandardInput.Close','CopyToAsync','PWB_OUTPUT_LIMIT','Kill($true)','stdoutSha256','executableSha256')){
+    foreach($required in @('ArgumentList','StandardInput.Close','CopyToAsync','PWB_OUTPUT_LIMIT','Kill($true)','stdoutSha256','executableSha256','Resolve-PowerShellWorkbenchCodexDesktop.ps1','CatalogManifestPath','codexVersion','catalogSha256')){
         Assert-True ($runnerAst.Extent.Text.Contains($required)) "Runner is missing contract: $required"
+    }
+
+    foreach($scriptPath in @($desktopResolver,$catalogGenerator)){
+        $tokens=$null;$errors=$null
+        [void][Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$errors)
+        Assert-True (@($errors).Count -eq 0) "Harness helper has parser errors: $scriptPath"
     }
 
     $templateText=Get-Content -LiteralPath $providerTemplate -Raw
@@ -143,6 +154,7 @@ using System;
 using System.Threading;
 public static class FakeCodex {
     public static int Main(string[] args) {
+        if (args.Length == 1 && args[0] == "--version") { Console.WriteLine("codex-cli 0.0.0"); return 0; }
         if (Environment.GetEnvironmentVariable("PWB_FAKE_TIMEOUT") == "1") { Thread.Sleep(5000); return 0; }
         if (Environment.GetEnvironmentVariable("PWB_FAKE_FLOOD") == "1") { Console.Write(new string('x', 8192)); return 0; }
         Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake\"}");
@@ -158,9 +170,13 @@ public static class FakeCodex {
         $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
         if(-not(Test-Path $compiler)){throw 'Local csc.exe is required.'}
         & $compiler /nologo /target:exe "/out:$fakeCli" $sourcePath
-        $capture=& $runner -Prompt 'fixture' -ModelId 'fixture-model' -ModelDigest 'fixture-digest' -ProviderId 'fixture-provider' -Endpoint 'http://127.0.0.1:11434' -EffectiveContext 4096 -WorkingDirectory $tempRoot -OutputDirectory (Join-Path $tempRoot capture) -CodexPath $fakeCli
+        $catalogPath=Join-Path $tempRoot 'fixture-catalog.json';Set-Content -LiteralPath $catalogPath -Value '{"models":[]}' -Encoding UTF8
+        $catalogSha256=(Get-FileHash -LiteralPath $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $catalogManifestPath=Join-Path $tempRoot 'fixture-catalog.manifest.json'
+        [ordered]@{model='fixture-model';contextWindow=4096;codexVersion='0.0.0';codexSha256=(Get-FileHash -LiteralPath $fakeCli -Algorithm SHA256).Hash.ToLowerInvariant();catalogPath=$catalogPath;catalogSha256=$catalogSha256}|ConvertTo-Json|Set-Content -LiteralPath $catalogManifestPath -Encoding UTF8
+        $capture=& $runner -Prompt 'fixture' -ModelId 'fixture-model' -ModelDigest 'fixture-digest' -ProviderId 'fixture-provider' -Endpoint 'http://127.0.0.1:11434' -EffectiveContext 4096 -WorkingDirectory $tempRoot -OutputDirectory (Join-Path $tempRoot capture) -CodexPath $fakeCli -CatalogManifestPath $catalogManifestPath
         Assert-True ($capture.captureStatus -eq 'Completed') 'Bounded runner legitimate control failed.'
-        $validated=Invoke-EvidenceValidation -MetadataPath $capture.MetadataPath -Parameters @{ExpectedExecutableSha256=(Get-FileHash $fakeCli -Algorithm SHA256).Hash;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
+        $validated=Invoke-EvidenceValidation -MetadataPath $capture.MetadataPath -Parameters @{ExpectedExecutableSha256=(Get-FileHash $fakeCli -Algorithm SHA256).Hash;ExpectedCodexVersion='0.0.0';ExpectedModelId='fixture-model';ExpectedModelDigest='fixture-digest';ExpectedEffectiveContext=4096;ExpectedCatalogSha256=$catalogSha256;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
         Assert-True $validated.Passed 'Captured legitimate control did not validate.'
 
         $env:PWB_FAKE_FLOOD='1'

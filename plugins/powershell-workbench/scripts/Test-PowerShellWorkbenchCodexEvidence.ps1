@@ -18,6 +18,11 @@ param(
     [ValidateRange(1, 1000000)][int]$MaxEvents = 100000,
     [ValidateRange(1, 10000)][int]$MaxFailures = 100,
     [string[]]$AllowedStderrRegex = @(),
+    [string]$ExpectedCodexVersion,
+    [string]$ExpectedModelId,
+    [string]$ExpectedModelDigest,
+    [ValidateRange(1,1048576)][int64]$ExpectedEffectiveContext,
+    [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedCatalogSha256,
     [switch]$NoThrow,
     [switch]$AsJson
 )
@@ -62,10 +67,21 @@ else{
     if($observedExecutableHash -ne ([string](Get-PropertyValue -Object $launch -Name 'executableSha256')).ToLowerInvariant()){Add-Failure 'Executable changed after capture.'}
     if($observedExecutableHash -ne $ExpectedExecutableSha256.ToLowerInvariant()){Add-Failure 'Executable does not match the independently expected SHA256.'}
 }
+$recordedCodexVersion=[string](Get-PropertyValue -Object $launch -Name 'codexVersion')
+if($ExpectedCodexVersion -and $recordedCodexVersion -cne $ExpectedCodexVersion){Add-Failure 'Recorded Codex version does not match ExpectedCodexVersion.'}
 $declarations=Get-PropertyValue -Object $metadata -Name 'declarations'
 if((Get-PropertyValue -Object $declarations -Name 'attestation') -ne 'unverified-caller-declaration'){Add-Failure 'Runtime declaration state is missing or unknown.'}
 if(-not $AcceptUnverifiedRuntimeDeclarations){Add-Failure 'Runtime model/provider/context declarations are not independently attested.'}
 $provider=Get-PropertyValue -Object $declarations -Name 'provider'
+$recordedModel=Get-PropertyValue -Object $declarations -Name 'model'
+$recordedRuntime=Get-PropertyValue -Object $declarations -Name 'runtime'
+if($ExpectedModelId -and [string](Get-PropertyValue -Object $recordedModel -Name 'id') -cne $ExpectedModelId){Add-Failure 'Recorded model id does not match ExpectedModelId.'}
+if($ExpectedModelDigest -and [string](Get-PropertyValue -Object $recordedModel -Name 'digest') -cne $ExpectedModelDigest){Add-Failure 'Recorded model digest does not match ExpectedModelDigest.'}
+if($ExpectedEffectiveContext -and [int64](Get-PropertyValue -Object $recordedRuntime -Name 'effectiveContext' -Default 0) -ne $ExpectedEffectiveContext){Add-Failure 'Recorded effective context does not match ExpectedEffectiveContext.'}
+$recordedCatalog=Get-PropertyValue -Object $declarations -Name 'catalog'
+if($ExpectedCatalogSha256){
+    if($null -eq $recordedCatalog -or [string](Get-PropertyValue -Object $recordedCatalog -Name 'catalogSha256') -ine $ExpectedCatalogSha256){Add-Failure 'Recorded catalog SHA256 does not match ExpectedCatalogSha256.'}
+}
 $providerEndpoint=[string](Get-PropertyValue -Object $provider -Name 'endpoint')
 $derivedLoopback=$false
 try{$providerUri=[uri]$providerEndpoint;$derivedLoopback=$providerUri.DnsSafeHost.ToLowerInvariant() -in @('localhost','127.0.0.1','::1','[::1]')}catch{Add-Failure 'Declared provider endpoint is not a valid URI.'}
