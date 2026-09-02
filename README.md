@@ -41,6 +41,7 @@ Then start a new Codex task.
 
 - Scaffold scripts, advanced functions, modules, manifests, tests, contracts, documentation, lint configuration, and CI files.
 - Refactor PowerShell while preserving behavior, compatibility, exports, and safety boundaries.
+- Make precise, low-churn edits to compact or generated code when normal patch context is fragile.
 - Discover mixed-language project context without embedding workstation-specific paths.
 - Apply RecoveryToolkit and WingetDownloader conventions when those projects are detected.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
@@ -67,6 +68,7 @@ $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
 
 & '<plugin-root>\scripts\Test-PowerShellWorkbenchCodexEvidence.ps1' `
     -MetadataPath $capture.MetadataPath `
+    -ExpectedMetadataSha256 '<independently-recorded-metadata-sha256>' `
     -ExpectedExecutableSha256 '<independently-pinned-codex-executable-sha256>' `
     -AcceptUnverifiedRuntimeDeclarations `
     -MinimumSuccessfulToolCalls 1 `
