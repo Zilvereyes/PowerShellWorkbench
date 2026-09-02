@@ -15,3 +15,5 @@ Use this skill when the user wants to reuse, move, share, install, or update Pow
 6. Do not install third-party GitHub Marketplace Actions by default. Prefer direct PowerShell, Pester, and PSScriptAnalyzer commands plus pinned official actions; add a third-party action only after a specific review and explicit request.
 
 When moving to another machine, optionally create `%USERPROFILE%\.config\powershell-workbench\projects.json` for projects that cannot be found by walking up from the active workspace.
+
+For a movable project configuration, create `.powershell-workbench/project-profile.json` with `../../scripts/New-PowerShellWorkbenchProjectProfile.ps1`. Keep project and component roots relative to that file; use `Resolve-PowerShellWorkbenchProjectProfile.ps1` to resolve and validate them before work. A future portal should edit this versioned profile rather than embedding paths in scripts.

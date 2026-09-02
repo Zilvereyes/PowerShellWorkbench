@@ -1,6 +1,6 @@
 ---
 name: winget-downloader-development
-description: Develop or modernize the local WingetDownloader module with explicit exports, help, tests, structured status, cache integrity, safe paths, and recovery handoff compatibility.
+description: Modernize WingetDownloader with explicit exports, help, tests, structured status, cache integrity, safe paths, and recovery handoff compatibility.
 ---
 
 # WingetDownloader Development

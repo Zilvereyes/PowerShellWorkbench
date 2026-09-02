@@ -17,6 +17,7 @@ param(
     [ValidateRange(1024, 1073741824)][long]$MaxStderrBytes = 10485760,
     [ValidateRange(2048, 2147483648)][long]$MaxTotalOutputBytes = 62914560,
     [string]$CodexPath,
+    [string]$CatalogManifestPath,
     [string[]]$GlobalArgument = @(),
     [string[]]$ExecArgument = @('--ephemeral'),
     [string]$FixturePath,
@@ -63,16 +64,26 @@ namespace PowerShellWorkbench {
 '@
 }
 
-if (-not $CodexPath) {
-    $command = Get-Command codex -All -ErrorAction Stop | Where-Object { $_.Source -like '*.exe' } | Select-Object -First 1
-    if (-not $command) { throw 'No native codex.exe was found. Install the standalone Codex CLI or pass -CodexPath.' }
-    $CodexPath = $command.Source
-}
+if (-not $CodexPath) { $CodexPath = (& (Join-Path $PSScriptRoot 'Resolve-PowerShellWorkbenchCodexDesktop.ps1')).Path }
 $CodexPath = (Resolve-Path -LiteralPath $CodexPath).Path
 if ([IO.Path]::GetExtension($CodexPath) -ine '.exe') { throw '-CodexPath must identify a native .exe.' }
 $codexExecutableSha256 = (Get-FileHash -LiteralPath $CodexPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$codexVersionOutput = (& $CodexPath --version 2>$null) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $codexVersionOutput -notmatch '^codex-cli\s+(?<version>\d+\.\d+\.\d+)$') { throw "Could not obtain a deterministic Codex version from '$CodexPath'." }
+$codexVersion = $Matches.version
 $WorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
 if ($MaxTotalOutputBytes -lt ($MaxStdoutBytes + $MaxStderrBytes)) { throw '-MaxTotalOutputBytes must be at least the sum of the per-stream limits.' }
+$catalogManifestResolved=$null;$catalogManifestSha256=$null;$catalogPath=$null;$catalogSha256=$null
+if($CatalogManifestPath){
+    $catalogManifestResolved=(Resolve-Path -LiteralPath $CatalogManifestPath).Path
+    try{$catalogManifest=Get-Content -LiteralPath $catalogManifestResolved -Raw|ConvertFrom-Json -Depth 20}catch{throw "Catalog manifest is invalid JSON: $($_.Exception.Message)"}
+    if([string]$catalogManifest.model -cne $ModelId -or [int64]$catalogManifest.contextWindow -ne $EffectiveContext){throw 'Catalog manifest model or context does not match this run.'}
+    if([string]$catalogManifest.codexSha256 -ine $codexExecutableSha256 -or [string]$catalogManifest.codexVersion -cne $codexVersion){throw 'Catalog manifest Codex identity does not match this runner.'}
+    $catalogPath=(Resolve-Path -LiteralPath ([string]$catalogManifest.catalogPath)).Path
+    $catalogSha256=(Get-FileHash -LiteralPath $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if($catalogSha256 -ine [string]$catalogManifest.catalogSha256){throw 'Catalog SHA256 does not match its manifest.'}
+    $catalogManifestSha256=(Get-FileHash -LiteralPath $catalogManifestResolved -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 
 $endpointHost = $Endpoint.DnsSafeHost.ToLowerInvariant()
 $isLoopback = $endpointHost -in @('localhost', '127.0.0.1', '::1', '[::1]')
@@ -191,6 +202,7 @@ $metadata = [ordered]@{
     launch = [ordered]@{
         executablePath = $CodexPath
         executableSha256 = $codexExecutableSha256
+        codexVersion = $codexVersion
         workingDirectory = $WorkingDirectory
         argumentSha256 = Get-TextSha256 -Text $argumentHashInput
     }
@@ -199,6 +211,7 @@ $metadata = [ordered]@{
         model = [ordered]@{ id=$ModelId; digest=$ModelDigest }
         provider = [ordered]@{ id=$ProviderId; endpoint=$Endpoint.AbsoluteUri; isLoopback=$isLoopback }
         runtime = [ordered]@{ effectiveContext=$EffectiveContext; sandbox=$Sandbox; approvalPolicy=$ApprovalPolicy; profile=$WorkbenchProfile }
+        catalog = [ordered]@{ manifestPath=$catalogManifestResolved; manifestSha256=$catalogManifestSha256; catalogPath=$catalogPath; catalogSha256=$catalogSha256 }
     }
     input = [ordered]@{ promptSha256=Get-TextSha256 -Text $Prompt; fixturePath=$fixtureResolved; fixtureSha256=$fixtureSha256 }
     limits = [ordered]@{ timeoutSeconds=$TimeoutSeconds; maxStdoutBytes=$MaxStdoutBytes; maxStderrBytes=$MaxStderrBytes; maxTotalOutputBytes=$MaxTotalOutputBytes }

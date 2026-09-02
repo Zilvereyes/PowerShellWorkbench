@@ -4,7 +4,7 @@ PowerShell Workbench is a portable Codex plugin for PowerShell-centered and mixe
 
 ## Windows prerequisite
 
-`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. Follow the current official instructions at https://developers.openai.com/codex/cli. Avoid piping downloaded scripts directly into `Invoke-Expression`; authenticate installation artifacts before execution.
+`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. Follow the [current official instructions](https://developers.openai.com/codex/cli). Avoid piping downloaded scripts directly into `Invoke-Expression`; authenticate installation artifacts before execution.
 
 Open a new PowerShell window and verify:
 
@@ -76,7 +76,8 @@ $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
     -RequireExactFinalText
 ```
 
-The runner requires PowerShell 7 for reliable argument handling, asynchronous cancellation, and process-tree termination. The validator, fixtures, contract tests, and provider-switch transaction template support Windows PowerShell 5.1 and PowerShell 7.
+The runner requires PowerShell 7 for reliable argument handling, asynchronous cancellation, and process-tree termination.
+The validator, fixtures, contract tests, and provider-switch transaction template support Windows PowerShell 5.1 and PowerShell 7.
 
 ## Useful diagnostics
 
