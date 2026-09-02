@@ -12,6 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Write-PortalBlock {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Operator-visible, color-coded configuration blocks are an explicit workbench feature.')]
     param([string]$Title, [string[]]$Lines, [ConsoleColor]$Color = [ConsoleColor]::Cyan)
     $originalColor=[Console]::ForegroundColor
     try{
@@ -23,7 +24,7 @@ function Write-PortalBlock {
     }finally{[Console]::ForegroundColor=$originalColor}
 }
 
-function Ensure-Property {
+function Initialize-Property {
     param([object]$Object, [string]$Name, [object]$Value)
     if ($null -eq $Object.PSObject.Properties[$Name]) {
         $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value
@@ -35,11 +36,11 @@ if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) {
 }
 
 $config = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
-Ensure-Property $config 'project' ([pscustomobject]@{ root = '.' })
-Ensure-Property $config 'components' @()
-Ensure-Property $config 'paths' ([pscustomobject]@{})
-Ensure-Property $config 'targets' ([pscustomobject]@{ windows = @() })
-Ensure-Property $config.targets 'windows' @()
+Initialize-Property -Object $config -Name 'project' -Value ([pscustomobject]@{ root = '.' })
+Initialize-Property -Object $config -Name 'components' -Value @()
+Initialize-Property -Object $config -Name 'paths' -Value ([pscustomobject]@{})
+Initialize-Property -Object $config -Name 'targets' -Value ([pscustomobject]@{ windows = @() })
+Initialize-Property -Object $config.targets -Name 'windows' -Value @()
 
 $changed = $false
 if ($PSBoundParameters.ContainsKey('ProjectRoot')) { $config.project.root = $ProjectRoot; $changed = $true }
@@ -58,16 +59,16 @@ if ($PSBoundParameters.ContainsKey('WindowsTarget')) { $config.targets.windows =
 
 if ($changed -and -not $NoWrite) {
     $config | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ProfilePath -Encoding UTF8
-    Write-PortalBlock 'PROFILE GEMT' @($ProfilePath, 'Kun den angivne projektkonfiguration blev opdateret.') Green
+    Write-PortalBlock -Title 'PROFILE GEMT' -Lines @($ProfilePath, 'Kun den angivne projektkonfiguration blev opdateret.') -Color Green
 }
-elseif ($changed) { Write-PortalBlock 'FORHANDSVISNING' @('NoWrite er aktiv: ingen fil blev aendret.') Yellow }
+elseif ($changed) { Write-PortalBlock -Title 'FORHANDSVISNING' -Lines @('NoWrite er aktiv: ingen fil blev aendret.') -Color Yellow }
 
 $componentLines = @($config.components | ForEach-Object { "{0}: {1}" -f $_.id, $_.root })
 $pathLines = @($config.paths.PSObject.Properties | ForEach-Object { "{0}: {1}" -f $_.Name, $_.Value })
 $targetLines = @($config.targets.windows | ForEach-Object { "Windows: $_" })
-Write-PortalBlock 'PROJECT PORTAL' @("Profile: $ProfilePath", "Project root: $($config.project.root)", "Mode: $(if ($changed) { if ($NoWrite) { 'preview' } else { 'updated' } } else { 'read-only overview' })") Cyan
-Write-PortalBlock 'COMPONENT ROOTS' $(if ($componentLines.Count) { $componentLines } else { 'No component roots configured.' }) Magenta
-Write-PortalBlock 'WINDOWS TARGETS' $(if ($targetLines.Count) { $targetLines } else { 'No Windows targets configured.' }) Yellow
-Write-PortalBlock 'WORKING PATHS' $(if ($pathLines.Count) { $pathLines } else { 'No working paths configured.' }) DarkCyan
+Write-PortalBlock -Title 'PROJECT PORTAL' -Lines @("Profile: $ProfilePath", "Project root: $($config.project.root)", "Mode: $(if ($changed) { if ($NoWrite) { 'preview' } else { 'updated' } } else { 'read-only overview' })") -Color Cyan
+Write-PortalBlock -Title 'COMPONENT ROOTS' -Lines $(if ($componentLines.Count) { $componentLines } else { 'No component roots configured.' }) -Color Magenta
+Write-PortalBlock -Title 'WINDOWS TARGETS' -Lines $(if ($targetLines.Count) { $targetLines } else { 'No Windows targets configured.' }) -Color Yellow
+Write-PortalBlock -Title 'WORKING PATHS' -Lines $(if ($pathLines.Count) { $pathLines } else { 'No working paths configured.' }) -Color DarkCyan
 
 [pscustomobject]@{ ProfilePath = (Resolve-Path -LiteralPath $ProfilePath).Path; ProjectRoot = $config.project.root; Components = $config.components; WindowsTargets = @($config.targets.windows); Paths = $config.paths; WasUpdated = ($changed -and -not $NoWrite) }

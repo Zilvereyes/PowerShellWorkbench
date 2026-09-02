@@ -19,6 +19,7 @@ function Protect-OperatorText {
     $Text -replace '(?i)((?:api[_-]?key|token|password|secret|authorization)\s*[=:]\s*)[^\s;]+','$1[REDACTED]'
 }
 function Write-OperatorLine {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Operator-visible, color-coded progress is an explicit workbench feature.')]
     param([string]$Message,[ConsoleColor]$Color)
     $originalColor=[Console]::ForegroundColor
     try{[Console]::ForegroundColor=$Color;[Console]::WriteLine($Message)}finally{[Console]::ForegroundColor=$originalColor}
@@ -26,9 +27,9 @@ function Write-OperatorLine {
 function Write-OperatorBlock {
     param([ValidateSet('STARTER','FAERDIG','VERIFICERET','FEJL','ROLLBACK')][string]$State,[string]$Message)
     $color=@{STARTER='Cyan';FAERDIG='Green';VERIFICERET='Green';FEJL='Red';ROLLBACK='Yellow'}[$State]
-    Write-OperatorLine ("`n========== {0} ==========" -f $State) $color
-    Write-OperatorLine $Message $color
-    Write-OperatorLine ('=' * (22 + $State.Length)) $color
+    Write-OperatorLine -Message ("`n========== {0} ==========" -f $State) -Color $color
+    Write-OperatorLine -Message $Message -Color $color
+    Write-OperatorLine -Message ('=' * (22 + $State.Length)) -Color $color
 }
 
 $resolvedFile=(Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).Path
@@ -45,7 +46,7 @@ if($AnalyzeOnly){$timeline.Add('ANALYZE_ONLY process was not started.');Write-Op
     try{
         Push-Location -LiteralPath $resolvedWorkingDirectory
         try{
-            & $resolvedFile @ArgumentList 2>&1|ForEach-Object {$line=Protect-OperatorText ([string]$_);$timeline.Add("OUTPUT $line");Write-OperatorLine $line 'Gray'}
+            & $resolvedFile @ArgumentList 2>&1|ForEach-Object {$line=Protect-OperatorText ([string]$_);$timeline.Add("OUTPUT $line");Write-OperatorLine -Message $line -Color 'Gray'}
             $exitCode=$LASTEXITCODE;$processStarted=$true
         }finally{Pop-Location}
         if($exitCode -eq 0){Write-OperatorBlock -State 'FAERDIG' -Message "[$StepId] afsluttet med exit code 0.";$timeline.Add('FAERDIG exit code 0.')}else{Write-OperatorBlock -State 'FEJL' -Message "[$StepId] afsluttet med exit code $exitCode.";$timeline.Add("FEJL exit code $exitCode.")}
