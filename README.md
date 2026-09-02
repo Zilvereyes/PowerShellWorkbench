@@ -49,6 +49,7 @@ Then start a new Codex task.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
+- Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
 - Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
 
 ## Bounded Codex JSONL evidence

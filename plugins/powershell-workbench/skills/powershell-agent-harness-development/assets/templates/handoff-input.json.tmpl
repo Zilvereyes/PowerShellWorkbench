@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "handoffId": "example-handoff",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "source": { "taskId": "source-task-id", "title": "Source task" },
+  "destination": { "taskId": "destination-task-id", "title": "Destination task" },
+  "project": { "root": "C:\\Project", "pluginVersion": "0.0.0", "pluginSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "objective": "Describe the bounded objective.",
+  "verifiedFacts": [
+    { "statement": "Describe a verified fact.", "evidence": [{ "path": "evidence/result.json", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }] }
+  ],
+  "changedFiles": [{ "path": "scripts/example.ps1", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }],
+  "testResults": [{ "name": "Contract tests", "runtime": "Windows PowerShell 5.1", "status": "Passed", "evidenceSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" }],
+  "unresolvedDecisions": [],
+  "authorityBoundaries": ["Deterministic code owns pass and fail decisions."],
+  "safetyBoundaries": ["This artifact does not execute or transport anything."],
+  "requestedActions": ["Review the validated local artifacts."],
+  "reloadCanary": "PWB_HANDOFF_RELOAD_OK"
+}
