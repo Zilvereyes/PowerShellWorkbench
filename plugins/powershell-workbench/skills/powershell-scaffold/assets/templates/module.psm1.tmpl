@@ -1,0 +1,18 @@
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+
+$privatePath = Join-Path $PSScriptRoot 'Private'
+$publicPath = Join-Path $PSScriptRoot 'Public'
+
+if (Test-Path -LiteralPath $privatePath) {
+    Get-ChildItem -LiteralPath $privatePath -Filter '*.ps1' -File | Sort-Object Name | ForEach-Object { . $_.FullName }
+}
+
+$publicFunctions = @()
+if (Test-Path -LiteralPath $publicPath) {
+    $publicFiles = @(Get-ChildItem -LiteralPath $publicPath -Filter '*.ps1' -File | Sort-Object Name)
+    $publicFiles | ForEach-Object { . $_.FullName }
+    $publicFunctions = @($publicFiles | ForEach-Object { $_.BaseName })
+}
+
+Export-ModuleMember -Function $publicFunctions

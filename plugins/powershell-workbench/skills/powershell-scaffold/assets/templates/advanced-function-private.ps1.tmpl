@@ -1,0 +1,13 @@
+function {{NAME}} {
+    [CmdletBinding()]
+    param()
+
+    Set-StrictMode -Version 2.0
+    $ErrorActionPreference = 'Stop'
+
+    # Private {{PROFILE}} helper. {{LOGGING_GUIDANCE}}
+    [pscustomobject]@{
+        Name = '{{NAME}}'
+        Succeeded = $true
+    }
+}

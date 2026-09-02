@@ -1,0 +1,14 @@
+BeforeAll {
+    $script:ContractName = '{{NAME}}'
+    $script:ExpectedProfile = '{{PROFILE}}'
+}
+
+Describe '{{NAME}} source contract' {
+    It 'declares a stable contract identity' {
+        $script:ContractName | Should -Match '^[A-Za-z][A-Za-z0-9_.-]*$'
+    }
+
+    It 'declares a supported profile' {
+        $script:ExpectedProfile | Should -BeIn @('Generic', 'RecoveryToolkit', 'WingetDownloader')
+    }
+}

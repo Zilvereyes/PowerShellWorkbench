@@ -1,0 +1,24 @@
+function {{NAME}} {
+    <#
+    .SYNOPSIS
+    Performs the {{NAME}} operation.
+
+    .DESCRIPTION
+    Dual-compatible {{PROFILE}} function scaffold. {{PATH_HINT}}
+
+    .OUTPUTS
+    PSCustomObject
+    #>
+    [CmdletBinding()]
+    param()
+
+    Set-StrictMode -Version 2.0
+    $ErrorActionPreference = 'Stop'
+
+    # {{SAFETY_GUIDANCE}}
+    [pscustomobject]@{
+        Name = '{{NAME}}'
+        Profile = '{{PROFILE}}'
+        Succeeded = $true
+    }
+}

@@ -1,0 +1,16 @@
+BeforeAll {
+    $script:TestRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('{{NAME}}-' + [guid]::NewGuid().Guid)
+    $null = New-Item -ItemType Directory -Path $script:TestRoot -Force
+}
+
+AfterAll {
+    if (Test-Path -LiteralPath $script:TestRoot) {
+        Remove-Item -LiteralPath $script:TestRoot -Recurse -Force
+    }
+}
+
+Describe '{{NAME}} synthetic behavior' {
+    It 'keeps synthetic writes inside the temporary boundary' {
+        [System.IO.Path]::GetFullPath($script:TestRoot).StartsWith([System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()), [System.StringComparison]::OrdinalIgnoreCase) | Should -BeTrue
+    }
+}

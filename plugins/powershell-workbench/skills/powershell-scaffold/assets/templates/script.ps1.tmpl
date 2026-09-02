@@ -1,0 +1,21 @@
+<#
+.SYNOPSIS
+Runs the {{NAME}} workflow.
+
+.DESCRIPTION
+Dual-compatible {{PROFILE}} entry script created on {{DATE}}. {{SAFETY_GUIDANCE}}
+#>
+[CmdletBinding(SupportsShouldProcess = $true)]
+param(
+    [string]$OutputPath
+)
+
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+
+[pscustomobject]@{
+    Name = '{{NAME}}'
+    Profile = '{{PROFILE}}'
+    OutputPath = $OutputPath
+    Changed = $false
+}

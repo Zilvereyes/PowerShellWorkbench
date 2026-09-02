@@ -1,0 +1,20 @@
+{
+  "name": "powershell-workbench",
+  "interface": {
+    "displayName": "PowerShell Workbench"
+  },
+  "plugins": [
+    {
+      "name": "powershell-workbench",
+      "source": {
+        "source": "local",
+        "path": "./plugins/powershell-workbench"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

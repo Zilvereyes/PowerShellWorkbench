@@ -1,0 +1,13 @@
+BeforeAll {
+    $script:TargetName = '{{NAME}}'
+}
+
+Describe '{{NAME}} basic behavior' {
+    It 'uses the expected project profile' {
+        '{{PROFILE}}' | Should -Not -BeNullOrEmpty
+    }
+
+    It 'has no unresolved template tokens' {
+        $script:TargetName | Should -Not -Match '\{\{.+\}\}'
+    }
+}

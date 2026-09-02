@@ -1,0 +1,11 @@
+# Local validation and generated output
+.tmp/
+tmp/
+artifacts/
+TestResults/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.user
+*.suo
