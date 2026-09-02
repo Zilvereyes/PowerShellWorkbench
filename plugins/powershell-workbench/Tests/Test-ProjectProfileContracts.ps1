@@ -12,5 +12,8 @@ try{
     $profileDocument|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $created.ProfilePath -Encoding UTF8
     $rejected=$false;try{& $resolveProfile -ProfilePath $created.ProfilePath|Out-Null}catch{$rejected=$true}
     if(-not $rejected){throw 'External component root was accepted without explicit authorization.'}
+    $previewProfilePath=Join-Path $tempRoot '.powershell-workbench\preview-project-profile.json'
+    $preview=& $newProfile -ProjectRoot $tempRoot -Name 'FixtureProject' -Destination $previewProfilePath -NoWrite
+    if(-not $preview.ProfilePath -or -not $preview.ProfileDocument -or $preview.ProfileDocument.project.name -ne 'FixtureProject' -or $preview.WasCreated -or -not $preview.WasPreview -or (Test-Path -LiteralPath $previewProfilePath -PathType Leaf)){throw 'NoWrite profile creation did not return a preview document only.'}
     'PowerShell Workbench project profile contracts passed.'
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}

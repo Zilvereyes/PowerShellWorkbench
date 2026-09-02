@@ -18,7 +18,12 @@ process {
         foreach($assignment in $ast.FindAll({param($node)$node -is [Management.Automation.Language.AssignmentStatementAst]},$true)){
             $variable=$assignment.Left -as [Management.Automation.Language.VariableExpressionAst];if($null -eq $variable){continue}
             $name=($variable.VariablePath.UserPath -replace '^(?i:(global|script|local|private):)','').ToLowerInvariant()
-            if($protected.ContainsKey($name)){$diagnostics.Add([pscustomobject]@{Path=$resolved;Line=$variable.Extent.StartLineNumber;Column=$variable.Extent.StartColumnNumber;Variable='$'+$variable.VariablePath.UserPath;SuggestedReplacement='$'+$protected[$name];Rule='PSWorkbench.ProtectedAutomaticVariable';Message="Assignment to protected automatic variable '$$name'. Use '$$($protected[$name])' instead."})}
+            if($protected.ContainsKey($name)){
+                $displayVariable = '$'+$name
+                $displayReplacement = '$'+[string]$protected[$name]
+                $message = "Assignment to protected automatic variable '{0}'. Use '{1}' instead." -f $displayVariable, $displayReplacement
+                $diagnostics.Add([pscustomobject]@{Path=$resolved;Line=$variable.Extent.StartLineNumber;Column=$variable.Extent.StartColumnNumber;Variable='$'+$variable.VariablePath.UserPath;SuggestedReplacement='$'+$protected[$name];Rule='PSWorkbench.ProtectedAutomaticVariable';Message=$message})
+            }
         }
     }
 }

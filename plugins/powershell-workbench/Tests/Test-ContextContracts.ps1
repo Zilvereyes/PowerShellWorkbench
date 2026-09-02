@@ -10,7 +10,7 @@ try{
     if('DISM' -notin $context.NativeTools -or 'Mount' -notin $context.RiskSurfaces){throw 'Servicing inventory is incomplete.'}
     $collision=Join-Path $tempRoot 'collision.ps1';Set-Content -LiteralPath $collision -Value '$home = "unsafe"' -Encoding UTF8
     $result=& $guard -Path $collision -NoThrow
-    if($result.Passed -or $result.Diagnostics[0].Line -ne 1 -or $result.Diagnostics[0].SuggestedReplacement -ne '$homeEntry'){throw 'Automatic-variable guard did not produce the expected diagnostic.'}
+    if($result.Passed -or $result.Diagnostics[0].Line -ne 1 -or $result.Diagnostics[0].SuggestedReplacement -ne '$homeEntry' -or $result.Diagnostics[0].Message -ne 'Assignment to protected automatic variable ''$home''. Use ''$homeEntry'' instead.'){throw 'Automatic-variable guard did not produce the expected diagnostic.'}
     $clean=Join-Path $tempRoot 'clean.ps1';Set-Content -LiteralPath $clean -Value '$homeEntry = "safe"' -Encoding UTF8
     if(-not((& $guard -Path $clean -NoThrow).Passed)){throw 'Automatic-variable guard rejected a safe variable.'}
     'PowerShell Workbench context contracts passed.'
