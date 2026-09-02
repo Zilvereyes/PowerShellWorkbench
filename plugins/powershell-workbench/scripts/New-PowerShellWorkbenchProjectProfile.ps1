@@ -13,7 +13,7 @@ if(-not $Name){$Name=Split-Path -Leaf $ProjectRoot}
 if(-not $Destination){$Destination=Join-Path $ProjectRoot '.powershell-workbench\project-profile.json'}
 $Destination=[IO.Path]::GetFullPath($Destination)
 if((Test-Path -LiteralPath $Destination) -and -not $Force){throw "Project profile already exists: $Destination. Use -Force to replace it."}
-$profile=[ordered]@{
+$profileDocument=[ordered]@{
     schemaVersion='1.0'
     project=[ordered]@{name=$Name;root='..'}
     components=@([ordered]@{id='main';root='..';role='primary'})
@@ -24,6 +24,6 @@ $profile=[ordered]@{
 if($PSCmdlet.ShouldProcess($Destination,'Create portable PowerShell Workbench project profile')){
     $directory=Split-Path -Parent $Destination
     if(-not(Test-Path -LiteralPath $directory -PathType Container)){New-Item -ItemType Directory -Path $directory -Force|Out-Null}
-    $profile|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $Destination -Encoding UTF8
+    $profileDocument|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $Destination -Encoding UTF8
     [pscustomobject]@{ProfilePath=$Destination;ProjectRoot=$ProjectRoot;Name=$Name}
 }

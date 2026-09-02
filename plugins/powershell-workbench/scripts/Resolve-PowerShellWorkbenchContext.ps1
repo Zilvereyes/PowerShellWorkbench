@@ -81,7 +81,6 @@ function Get-ServicingInventory {
 }
 
 function Get-PowerShellRuntimeInventory {
-    param([string]$Path)
 
     $seen = @{}
     $runtimes = New-Object System.Collections.Generic.List[object]
@@ -104,10 +103,10 @@ function Get-PowerShellRuntimeInventory {
     @($runtimes.ToArray())
 }
 
-function New-ContextResult {
-    param([string]$Profile, [string]$ProjectRoot, [string]$Source)
+function Get-ContextResult {
+    param([string]$ProfileName, [string]$ProjectRoot, [string]$Source)
     $servicing = Get-ServicingInventory -Path $ProjectRoot
-    [pscustomobject]@{ Profile=$Profile; ProjectRoot=$ProjectRoot; Source=$Source; Technologies=@(Get-TechnologiesAtPath -Path $ProjectRoot); NativeTools=$servicing.NativeTools; ArtifactTypes=$servicing.ArtifactTypes; RiskSurfaces=$servicing.RiskSurfaces; DetectedPowerShellRuntimes=@(Get-PowerShellRuntimeInventory -Path $ProjectRoot) }
+    [pscustomobject]@{ Profile=$ProfileName; ProjectRoot=$ProjectRoot; Source=$Source; Technologies=@(Get-TechnologiesAtPath -Path $ProjectRoot); NativeTools=$servicing.NativeTools; ArtifactTypes=$servicing.ArtifactTypes; RiskSurfaces=$servicing.RiskSurfaces; DetectedPowerShellRuntimes=@(Get-PowerShellRuntimeInventory) }
 }
 
 $candidate = [System.IO.Path]::GetFullPath($StartPath)
@@ -122,7 +121,7 @@ while (-not [string]::IsNullOrWhiteSpace($candidate)) {
     if (Test-Path -LiteralPath $candidate -PathType Container) {
         $detectedProfile = Get-ProfileAtPath -Path $candidate
         if ($detectedProfile -and ($RequestedProfile -in @('Auto', $detectedProfile) -or ($RequestedProfile -eq 'Generic' -and $detectedProfile -eq 'Generic'))) {
-            New-ContextResult -Profile $detectedProfile -ProjectRoot $candidate -Source 'Ancestor'
+            Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $candidate -Source 'Ancestor'
             return
         }
     }
@@ -145,14 +144,14 @@ if ($RegistryPath -and (Test-Path -LiteralPath $RegistryPath -PathType Leaf)) {
     foreach ($project in @($registry.projects)) {
         if ($project.path -and (Test-Path -LiteralPath $project.path -PathType Container) -and ($RequestedProfile -eq 'Auto' -or $project.profile -eq $RequestedProfile)) {
             $registeredRoot = [System.IO.Path]::GetFullPath([string]$project.path)
-            New-ContextResult -Profile ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry'
+            Get-ContextResult -ProfileName ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry'
             return
         }
     }
 }
 
 if ($RequestedProfile -in @('Auto', 'Generic') -and $fallbackRoot) {
-    New-ContextResult -Profile 'Generic' -ProjectRoot $fallbackRoot -Source 'StartPath'
+    Get-ContextResult -ProfileName 'Generic' -ProjectRoot $fallbackRoot -Source 'StartPath'
     return
 }
 

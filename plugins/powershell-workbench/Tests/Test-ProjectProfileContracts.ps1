@@ -7,9 +7,9 @@ try{
     $created=& $newProfile -ProjectRoot $tempRoot -Name 'FixtureProject' -Confirm:$false
     $resolved=& $resolveProfile -ProfilePath $created.ProfilePath
     if($resolved.ProjectName -ne 'FixtureProject' -or -not $resolved.ProjectRootExists -or $resolved.Components[0].ResolvedRoot -ne $tempRoot){throw 'Portable project profile did not resolve its relative root.'}
-    $profile=Get-Content -LiteralPath $created.ProfilePath -Raw|ConvertFrom-Json
-    $profile.components+=([pscustomobject]@{id='outside';root='..\..\outside';role='shared'})
-    $profile|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $created.ProfilePath -Encoding UTF8
+    $profileDocument=Get-Content -LiteralPath $created.ProfilePath -Raw|ConvertFrom-Json
+    $profileDocument.components+=([pscustomobject]@{id='outside';root='..\..\outside';role='shared'})
+    $profileDocument|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $created.ProfilePath -Encoding UTF8
     $rejected=$false;try{& $resolveProfile -ProfilePath $created.ProfilePath|Out-Null}catch{$rejected=$true}
     if(-not $rejected){throw 'External component root was accepted without explicit authorization.'}
     'PowerShell Workbench project profile contracts passed.'
