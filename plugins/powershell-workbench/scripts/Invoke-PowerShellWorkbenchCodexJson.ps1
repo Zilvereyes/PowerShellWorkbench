@@ -9,7 +9,7 @@ param(
     [Parameter(Mandatory)][ValidateRange(1, 1048576)][int]$EffectiveContext,
     [ValidateSet('read-only', 'workspace-write', 'danger-full-access')][string]$Sandbox = 'read-only',
     [ValidateSet('untrusted', 'on-failure', 'on-request', 'never')][string]$ApprovalPolicy = 'never',
-    [string]$Profile = 'default',
+    [Alias('Profile')][string]$WorkbenchProfile = 'default',
     [string]$WorkingDirectory = (Get-Location).Path,
     [string]$OutputDirectory = (Join-Path (Get-Location).Path 'TestResults\CodexJson'),
     [ValidateRange(1, 86400)][int]$TimeoutSeconds = 300,
@@ -97,7 +97,7 @@ foreach ($value in $GlobalArgument) { $arguments.Add($value) }
 $arguments.Add('--model'); $arguments.Add($ModelId)
 $arguments.Add('--sandbox'); $arguments.Add($Sandbox)
 $arguments.Add('--ask-for-approval'); $arguments.Add($ApprovalPolicy)
-if ($Profile -and $Profile -ne 'default') { $arguments.Add('--profile'); $arguments.Add($Profile) }
+if ($WorkbenchProfile -and $WorkbenchProfile -ne 'default') { $arguments.Add('--profile'); $arguments.Add($WorkbenchProfile) }
 $arguments.Add('exec'); $arguments.Add('--json')
 foreach ($value in $ExecArgument) { $arguments.Add($value) }
 $arguments.Add($Prompt)
@@ -160,7 +160,8 @@ try {
 } catch {
     $startError = $_.Exception.Message
     if ($captureStatus -eq 'Running') { $captureStatus = 'CaptureFailed' }
-    try { if (-not $process.HasExited) { $process.Kill($true) } } catch {}
+    try { if (-not $process.HasExited) { $process.Kill($true) } }
+    catch { Write-Verbose "Unable to terminate the failed process: $($_.Exception.Message)" }
 } finally {
     if ($stdoutSink) { $stdoutSink.Flush(); $stdoutSink.Dispose() }
     if ($stderrSink) { $stderrSink.Flush(); $stderrSink.Dispose() }
@@ -197,7 +198,7 @@ $metadata = [ordered]@{
         attestation = 'unverified-caller-declaration'
         model = [ordered]@{ id=$ModelId; digest=$ModelDigest }
         provider = [ordered]@{ id=$ProviderId; endpoint=$Endpoint.AbsoluteUri; isLoopback=$isLoopback }
-        runtime = [ordered]@{ effectiveContext=$EffectiveContext; sandbox=$Sandbox; approvalPolicy=$ApprovalPolicy; profile=$Profile }
+        runtime = [ordered]@{ effectiveContext=$EffectiveContext; sandbox=$Sandbox; approvalPolicy=$ApprovalPolicy; profile=$WorkbenchProfile }
     }
     input = [ordered]@{ promptSha256=Get-TextSha256 -Text $Prompt; fixturePath=$fixtureResolved; fixtureSha256=$fixtureSha256 }
     limits = [ordered]@{ timeoutSeconds=$TimeoutSeconds; maxStdoutBytes=$MaxStdoutBytes; maxStderrBytes=$MaxStderrBytes; maxTotalOutputBytes=$MaxTotalOutputBytes }
