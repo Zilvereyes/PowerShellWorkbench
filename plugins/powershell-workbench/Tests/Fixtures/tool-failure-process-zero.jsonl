@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"fixture-tool-failure"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"tool-1","type":"command_execution","command":"fixture-read","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"tool-1","type":"command_execution","command":"fixture-read","status":"failed","exit_code":1}}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"EXACT_OK"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":2}}

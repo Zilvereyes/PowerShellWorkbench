@@ -1,10 +1,11 @@
 [CmdletBinding()]
 param(
-    [string]$PluginRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$PluginRoot
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+if (-not $PluginRoot) { $PluginRoot = Split-Path -Parent $PSScriptRoot }
 
 $failures = New-Object System.Collections.Generic.List[string]
 $manifestPath = Join-Path $PluginRoot '.codex-plugin\plugin.json'
@@ -22,7 +23,8 @@ Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'skills') -Filter 'SKILL.md' -
     }
 }
 
-Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'scripts') -Filter '*.ps1' -File | ForEach-Object {
+@(Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'scripts') -Filter '*.ps1' -File) +
+@(Get-ChildItem -LiteralPath (Join-Path $PluginRoot 'Tests') -Filter '*.ps1' -File -Recurse -ErrorAction SilentlyContinue) | ForEach-Object {
     $tokens=$null; $errors=$null
     [void][Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors)
     foreach($error in @($errors)) { $failures.Add("Parser error in $($_.Name): $($error.Message)") }

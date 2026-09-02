@@ -1,0 +1,59 @@
+[CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Apply')]
+param(
+    [Parameter(Mandatory)]
+    [string]$ConfigPath,
+
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [scriptblock]$ApplyScopedEdit,
+
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [scriptblock]$PostCheck,
+
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [string]$BackupDirectory,
+
+    [Parameter(Mandatory, ParameterSetName = 'Restore')]
+    [string]$TransactionPath,
+
+    [Parameter(Mandatory, ParameterSetName = 'Restore')]
+    [switch]$Restore
+)
+
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+$resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
+
+if ($PSCmdlet.ParameterSetName -eq 'Restore') {
+    $transaction = Get-Content -LiteralPath (Resolve-Path -LiteralPath $TransactionPath) -Raw | ConvertFrom-Json
+    if ($transaction.configPath -ne $resolvedConfig) { throw 'Transaction config path does not match -ConfigPath.' }
+    if (-not (Test-Path -LiteralPath $transaction.backupPath -PathType Leaf)) { throw 'Recorded backup is missing.' }
+    if ((Get-FileHash -LiteralPath $transaction.backupPath -Algorithm SHA256).Hash -ne $transaction.beforeSha256) { throw 'Recorded backup hash is invalid.' }
+    if ($PSCmdlet.ShouldProcess($resolvedConfig, 'Restore provider configuration from verified backup')) {
+        Copy-Item -LiteralPath $transaction.backupPath -Destination $resolvedConfig -Force
+        if ((Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash -ne $transaction.beforeSha256) { throw 'Restore verification failed.' }
+    }
+    return
+}
+
+New-Item -ItemType Directory -Path $BackupDirectory -Force | Out-Null
+$transactionId = '{0}-{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')), ([guid]::NewGuid().ToString('N'))
+$backupPath = Join-Path $BackupDirectory "$transactionId.config.backup"
+$journalPath = Join-Path $BackupDirectory "$transactionId.transaction.json"
+$beforeHash = (Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash
+
+if (-not $PSCmdlet.ShouldProcess($resolvedConfig, 'Apply scoped provider configuration transaction')) { return }
+Copy-Item -LiteralPath $resolvedConfig -Destination $backupPath
+try {
+    & $ApplyScopedEdit $resolvedConfig
+    $postCheckResult = & $PostCheck $resolvedConfig
+    if ($postCheckResult -is [bool] -and -not $postCheckResult) { throw 'Provider post-check returned false.' }
+    $afterHash = (Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash
+    [ordered]@{
+        schemaVersion='1.0'; transactionId=$transactionId; status='Applied'; configPath=$resolvedConfig
+        backupPath=$backupPath; beforeSha256=$beforeHash; afterSha256=$afterHash; appliedAt=[DateTime]::UtcNow.ToString('o')
+    } | ConvertTo-Json | Set-Content -LiteralPath $journalPath -Encoding UTF8
+} catch {
+    Copy-Item -LiteralPath $backupPath -Destination $resolvedConfig -Force
+    if ((Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash -ne $beforeHash) { throw 'Provider change failed and automatic restore verification also failed.' }
+    throw "Provider change failed and was restored: $($_.Exception.Message)"
+}

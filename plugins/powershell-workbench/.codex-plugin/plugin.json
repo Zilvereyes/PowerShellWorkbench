@@ -1,6 +1,6 @@
 {
   "name": "powershell-workbench",
-  "version": "0.2.0+codex.20260902104825",
+  "version": "0.3.0+codex.20260902122223",
   "description": "Portable PowerShell scaffolding, refactoring, portfolio discovery, environment diagnostics, agent harnesses, and opt-in quality workflows.",
   "author": {
     "name": "Zilvereyes"

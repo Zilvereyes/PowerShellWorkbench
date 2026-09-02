@@ -18,15 +18,15 @@ jobs:
 
       - name: Validate with Windows PowerShell 5.1
         shell: powershell
-        run: >-
-          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1'
-          -PluginRoot '.\plugins\powershell-workbench'
+        run: |
+          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1' -PluginRoot '.\plugins\powershell-workbench'
+          & '.\plugins\powershell-workbench\Tests\Test-AgentHarnessContracts.ps1'
 
       - name: Validate with PowerShell 7
         shell: pwsh
-        run: >-
-          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1'
-          -PluginRoot '.\plugins\powershell-workbench'
+        run: |
+          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1' -PluginRoot '.\plugins\powershell-workbench'
+          & '.\plugins\powershell-workbench\Tests\Test-AgentHarnessContracts.ps1'
 
       - name: Smoke-test environment inventory
         shell: pwsh

@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"fixture-no-tool"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"EXACT_OK"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":2}}

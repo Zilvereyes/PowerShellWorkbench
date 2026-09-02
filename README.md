@@ -52,6 +52,31 @@ Then start a new Codex task.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 
+## Bounded Codex JSONL evidence
+
+PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, applies a timeout, terminates the process tree on timeout, and stores stdout JSONL, stderr, and bound run metadata.
+
+Validation fails closed on process or tool failures, `error`/`failed` events, policy, approval, or schema failures, malformed or empty JSONL, insufficient successful tool calls, unexpected final text, and optionally repeated tool-call fingerprints. Process exit code `0` and a plausible final agent message are never sufficient by themselves.
+
+```powershell
+$capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
+    -Prompt 'Use one read-only tool, then return EXACT_OK.' `
+    -ModelId 'model-name' `
+    -ModelDigest 'verified-model-digest' `
+    -DigestVerified `
+    -ProviderId 'local-provider' `
+    -Endpoint 'http://127.0.0.1:11434' `
+    -EffectiveContext 131072
+
+& '<plugin-root>\scripts\Test-PowerShellWorkbenchCodexEvidence.ps1' `
+    -MetadataPath $capture.MetadataPath `
+    -MinimumSuccessfulToolCalls 1 `
+    -ExpectedFinalText 'EXACT_OK' `
+    -RequireExactFinalText
+```
+
+The runner requires PowerShell 7 for reliable argument handling, asynchronous cancellation, and process-tree termination. The validator, fixtures, contract tests, and provider-switch transaction template support Windows PowerShell 5.1 and PowerShell 7.
+
 ## Useful diagnostics
 
 ```powershell
