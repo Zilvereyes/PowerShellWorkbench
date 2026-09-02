@@ -1,0 +1,35 @@
+name: Validate PowerShell Workbench
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Validate with Windows PowerShell 5.1
+        shell: powershell
+        run: >-
+          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1'
+          -PluginRoot '.\plugins\powershell-workbench'
+
+      - name: Validate with PowerShell 7
+        shell: pwsh
+        run: >-
+          & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1'
+          -PluginRoot '.\plugins\powershell-workbench'
+
+      - name: Smoke-test environment inventory
+        shell: pwsh
+        run: >-
+          & '.\plugins\powershell-workbench\scripts\Get-PowerShellWorkbenchEnvironment.ps1'
+          -AsJson | ConvertFrom-Json | Out-Null

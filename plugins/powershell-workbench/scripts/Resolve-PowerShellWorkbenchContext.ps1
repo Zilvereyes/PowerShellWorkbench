@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [Alias('Path')]
     [string]$StartPath = (Get-Location).Path,
 
     [ValidateSet('Auto', 'Generic', 'RecoveryToolkit', 'WingetDownloader')]
@@ -25,14 +26,18 @@ function Get-TechnologiesAtPath {
     param([string]$Path)
 
     $technologies = New-Object System.Collections.Generic.List[string]
-    $files = @(Get-ChildItem -LiteralPath $Path -File -ErrorAction SilentlyContinue)
+    $excludedSegments = @('.git', '.svn', 'node_modules', 'packages', 'bin', 'obj', 'TestResults', 'Reports', 'outputs', 'artifacts')
+    $files = @(Get-ChildItem -LiteralPath $Path -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Where-Object {
+        $relative = $_.FullName.Substring($Path.Length).TrimStart([char[]]'\\/')
+        -not @($excludedSegments | Where-Object { $relative -match ('(^|[\\/])' + [regex]::Escape($_) + '([\\/]|$)') }).Count
+    })
     if (@($files | Where-Object { $_.Extension -in @('.ps1', '.psm1', '.psd1') }).Count -gt 0) { $technologies.Add('PowerShell') }
-    if ((Test-Path -LiteralPath (Join-Path $Path 'pyproject.toml')) -or (Test-Path -LiteralPath (Join-Path $Path 'requirements.txt')) -or @($files | Where-Object Extension -eq '.py').Count -gt 0) { $technologies.Add('Python') }
-    if (Test-Path -LiteralPath (Join-Path $Path 'package.json')) { $technologies.Add('Node') }
+    if (@($files | Where-Object { $_.Name -in @('pyproject.toml', 'requirements.txt') -or $_.Extension -eq '.py' }).Count -gt 0) { $technologies.Add('Python') }
+    if (@($files | Where-Object Name -eq 'package.json').Count -gt 0) { $technologies.Add('Node') }
     if (@($files | Where-Object { $_.Extension -in @('.sln', '.csproj', '.fsproj') }).Count -gt 0) { $technologies.Add('.NET') }
-    if ((Test-Path -LiteralPath (Join-Path $Path 'CMakeLists.txt')) -or @($files | Where-Object { $_.Extension -in @('.c', '.cpp', '.h', '.hpp') }).Count -gt 0) { $technologies.Add('Native') }
+    if (@($files | Where-Object { $_.Name -eq 'CMakeLists.txt' -or $_.Extension -in @('.c', '.cpp', '.h', '.hpp') }).Count -gt 0) { $technologies.Add('Native') }
     if (@($files | Where-Object { $_.Extension -in @('.html', '.css', '.js', '.ts') }).Count -gt 0) { $technologies.Add('Web') }
-    if (@($files | Where-Object { $_.Extension -in @('.json', '.yaml', '.yml') }).Count -gt 0) { $technologies.Add('DataFormats') }
+    if (@($files | Where-Object { $_.Extension -in @('.json', '.yaml', '.yml', '.toml', '.xml') }).Count -gt 0) { $technologies.Add('DataFormats') }
     if (@($files | Where-Object Extension -eq '.md').Count -gt 0) { $technologies.Add('Documentation') }
     return @($technologies | Select-Object -Unique)
 }

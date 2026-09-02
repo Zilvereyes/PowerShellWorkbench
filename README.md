@@ -2,6 +2,23 @@
 
 PowerShell Workbench is a portable Codex plugin for PowerShell-centered and mixed-language projects. It supports Windows PowerShell 5.1 and PowerShell 7, with reusable scaffolding, refactoring guidance, project discovery, optional quality gates, and focused workflows for RecoveryToolkit and WingetDownloader.
 
+## Windows prerequisite
+
+`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. On Windows, the supported standalone installer does not require Node.js or npm:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+Open a new PowerShell window and verify:
+
+```powershell
+codex --version
+Get-Command codex
+```
+
+Adding `%APPDATA%\npm` to `PATH` does not install npm or Codex.
+
 ## Install from GitHub
 
 On each laptop, authenticate Git for GitHub access and run:
@@ -31,6 +48,18 @@ Then start a new Codex task.
 - Apply RecoveryToolkit and WingetDownloader conventions when those projects are detected.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
 - Package the plugin for another local marketplace, workstation, or Git-backed marketplace.
+- Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
+- Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
+- Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
+
+## Useful diagnostics
+
+```powershell
+& '<plugin-root>\scripts\Get-PowerShellWorkbenchEnvironment.ps1'
+
+& '<plugin-root>\scripts\Get-PowerShellWorkbenchProjectInventory.ps1' `
+    -Root 'C:\ProjectOne','C:\ProjectTwo'
+```
 
 ## Repository layout
 
@@ -44,4 +73,3 @@ The marketplace manifest points to `./plugins/powershell-workbench`. Project pat
 ## Safety
 
 The plugin does not perform elevation, image servicing, installer execution, cache deletion, recovery-media writes, or remote backlog writes unless explicitly requested.
-
