@@ -51,6 +51,17 @@ try {
     $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $itemError) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
     Assert-True (-not $result.Passed) 'An item-level error produced a false positive.'
 
+    $advisory=Join-Path $tempRoot 'advisory.jsonl'
+    @('{"type":"thread.started","thread_id":"x"}','{"type":"turn.started"}','{"type":"item.completed","item":{"id":"advisory-1","type":"error","status":"completed","text":"Skill descriptions were truncated to fit the skills budget."}}','{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"EXACT_OK"}}','{"type":"turn.completed"}')|Set-Content -LiteralPath $advisory -Encoding UTF8
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $advisory) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
+    Assert-True (-not $result.Passed) 'An advisory error passed without explicit allowlisting.'
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $advisory) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true;AllowedAdvisoryRegex=@('^Skill descriptions were truncated to fit the skills budget\.$')}
+    Assert-True $result.Passed 'An exact opt-in advisory allowlist did not apply.'
+    $policyAdvisory=Join-Path $tempRoot 'policy-advisory.jsonl'
+    @('{"type":"thread.started","thread_id":"x"}','{"type":"turn.started"}','{"type":"item.completed","item":{"id":"advisory-1","type":"error","status":"completed","text":"Policy error: access denied."}}','{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"EXACT_OK"}}','{"type":"turn.completed"}')|Set-Content -LiteralPath $policyAdvisory -Encoding UTF8
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $policyAdvisory) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true;AllowedAdvisoryRegex=@('^Policy error: access denied\.$')}
+    Assert-True (-not $result.Passed) 'A policy failure bypassed the advisory allowlist.'
+
     $stderrError=Join-Path $fixtures 'stderr-error.log'
     $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success -StderrFixture $stderrError)
     Assert-True (-not $result.Passed) 'A stderr error signal produced a false positive.'
