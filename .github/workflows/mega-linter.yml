@@ -1,0 +1,26 @@
+name: MegaLinter
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: MegaLinter
+        uses: oxsecurity/megalinter@15e5b45552097e318c93de385779ce3b1084052c # v10
+        env:
+          VALIDATE_ALL_CODEBASE: true
+          APPLY_FIXES: none

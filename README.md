@@ -4,11 +4,7 @@ PowerShell Workbench is a portable Codex plugin for PowerShell-centered and mixe
 
 ## Windows prerequisite
 
-`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. On Windows, the supported standalone installer does not require Node.js or npm:
-
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
-```
+`codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. Follow the current official instructions at https://developers.openai.com/codex/cli. Avoid piping downloaded scripts directly into `Invoke-Expression`; authenticate installation artifacts before execution.
 
 Open a new PowerShell window and verify:
 
@@ -21,10 +17,11 @@ Adding `%APPDATA%\npm` to `PATH` does not install npm or Codex.
 
 ## Install from GitHub
 
-On each laptop, authenticate Git for GitHub access and run:
+On each laptop, authenticate Git for GitHub access and select a reviewed immutable release tag or commit:
 
 ```powershell
-codex plugin marketplace add Zilvereyes/PowerShellWorkbench --ref main
+$PluginRef = '<reviewed-release-tag-or-full-commit>'
+codex plugin marketplace add Zilvereyes/PowerShellWorkbench --ref $PluginRef
 codex plugin add powershell-workbench@powershell-workbench
 ```
 
@@ -51,6 +48,7 @@ Then start a new Codex task.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
+- Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
 
 ## Bounded Codex JSONL evidence
 
