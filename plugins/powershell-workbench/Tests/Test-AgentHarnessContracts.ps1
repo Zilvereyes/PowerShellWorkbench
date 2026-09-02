@@ -20,9 +20,9 @@ function Invoke-EvidenceValidation {
 }
 function New-EvidenceFixture {
     [CmdletBinding(SupportsShouldProcess)]
-    param([string]$Jsonl,[bool]$TimedOut=$false,[int]$ProcessExitCode=0,[string]$CaptureStatus='Completed',[string]$ExecutablePath=$script:HostExecutable)
+    param([string]$Jsonl,[bool]$TimedOut=$false,[int]$ProcessExitCode=0,[string]$CaptureStatus='Completed',[string]$ExecutablePath=$script:HostExecutable,[string]$StderrFixture)
     $stderr=Join-Path $tempRoot ((Split-Path -Leaf $Jsonl)+'.stderr.log')
-    Set-Content -LiteralPath $stderr -Value 'fixture-stderr' -Encoding UTF8
+    if($StderrFixture){Copy-Item -LiteralPath $StderrFixture -Destination $stderr}else{Set-Content -LiteralPath $stderr -Value 'fixture-stderr' -Encoding UTF8}
     $path=Join-Path $tempRoot ((Split-Path -Leaf $Jsonl)+'.metadata.json')
     if($PSCmdlet.ShouldProcess($path,'Create isolated evidence metadata fixture')){
     [ordered]@{
@@ -44,6 +44,16 @@ try {
     $success=Join-Path $fixtures 'success.jsonl'
     $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success) -Parameters @{MinimumSuccessfulToolCalls=1;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
     Assert-True $result.Passed 'Success fixture did not pass.'
+
+    $itemError=Join-Path $fixtures 'item-error.jsonl'
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $itemError) -Parameters @{ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
+    Assert-True (-not $result.Passed) 'An item-level error produced a false positive.'
+
+    $stderrError=Join-Path $fixtures 'stderr-error.log'
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success -StderrFixture $stderrError)
+    Assert-True (-not $result.Passed) 'A stderr error signal produced a false positive.'
+    $result=Invoke-EvidenceValidation -MetadataPath (New-EvidenceFixture $success -StderrFixture $stderrError) -Parameters @{AllowedStderrRegex=@('^ERROR known harmless fixture$')}
+    Assert-True $result.Passed 'An explicit narrow stderr allowlist did not apply.'
 
     foreach($name in @('tool-failure-process-zero.jsonl','empty.jsonl','malformed.jsonl','no-tool-call.jsonl')){
         $path=Join-Path $fixtures $name

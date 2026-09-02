@@ -17,6 +17,7 @@ param(
     [ValidateRange(256, 10485760)][int]$MaxLineCharacters = 1048576,
     [ValidateRange(1, 1000000)][int]$MaxEvents = 100000,
     [ValidateRange(1, 10000)][int]$MaxFailures = 100,
+    [string[]]$AllowedStderrRegex = @(),
     [switch]$NoThrow,
     [switch]$AsJson
 )
@@ -87,6 +88,19 @@ foreach($artifactName in @('stdout','stderr')){
     $expectedBytes=[long](Get-PropertyValue -Object $artifacts -Name ($artifactName+'Bytes') -Default -1)
     if($actualBytes -ne $expectedBytes){Add-Failure "$artifactName byte length does not match metadata."}
     if(-not $expectedHash -or (Get-LowerHash $path) -ne $expectedHash.ToLowerInvariant()){Add-Failure "$artifactName SHA256 does not match metadata."}
+    if($artifactName -eq 'stderr'){
+        $stderrLineNumber=0
+        foreach($stderrLine in [IO.File]::ReadLines($path)){
+            $stderrLineNumber++
+            if($stderrLine -notmatch '(?i)\b(?:error|fatal|panic)\b|\b(?:policy|approval|schema)\b.*\b(?:error|failed|failure|denied|reject(?:ed|ion)?|violation|invalid)\b'){continue}
+            $allowed=$false
+            foreach($allowedPattern in $AllowedStderrRegex){
+                try{if($stderrLine -match $allowedPattern){$allowed=$true;break}}
+                catch{Add-Failure "AllowedStderrRegex is invalid: $allowedPattern";break}
+            }
+            if(-not $allowed){Add-Failure "stderr failure signal at line $stderrLineNumber."}
+        }
+    }
 }
 if($totalArtifactBytes -gt $MaxTotalArtifactBytes){Add-Failure 'Captured artifacts exceed MaxTotalArtifactBytes.'}
 
@@ -112,7 +126,7 @@ if($JsonlPath -and (Test-Path -LiteralPath $JsonlPath -PathType Leaf)){
             $itemType=[string](Get-PropertyValue -Object $item -Name 'type');$itemId=[string](Get-PropertyValue -Object $item -Name 'id');$status=([string](Get-PropertyValue -Object $item -Name 'status')).ToLowerInvariant()
             if(-not $itemType){Add-Failure "Item event at line $lineNumber has no item type."}
             if($status -in @('failed','error','denied','rejected','cancelled') -or $null -ne(Get-PropertyValue -Object $item -Name 'error')){Add-Failure "Item '$itemType' failed."}
-            if($itemType -match '(policy.*(violation|failure|error)|approval_request|approval.*(denied|failure|error)|schema.*(failure|error))'){Add-Failure "Authority or schema failure item '$itemType'."}
+            if($itemType -match '(?i)(?:^|[._-])(?:error|failure|failed|policy|approval|schema)(?:$|[._-])'){Add-Failure "Failure-class item '$itemType'."}
             $isTool=$itemType -in @('command_execution','mcp_tool_call','tool_call','web_search')
             if($isTool){
                 if(-not $turnActive){Add-Failure "Tool event '$itemId' occurred outside an active turn."}

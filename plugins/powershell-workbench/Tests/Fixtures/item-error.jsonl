@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"fixture-error"}
+{"type":"item.completed","item":{"id":"item-error","type":"error","message":"Fixture item-level error."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"message-1","type":"agent_message","text":"EXACT_OK"}}
+{"type":"turn.completed"}
