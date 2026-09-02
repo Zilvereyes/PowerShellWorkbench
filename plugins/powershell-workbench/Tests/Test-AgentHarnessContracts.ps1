@@ -155,6 +155,10 @@ using System.Threading;
 public static class FakeCodex {
     public static int Main(string[] args) {
         if (args.Length == 1 && args[0] == "--version") { Console.WriteLine("codex-cli 0.0.0"); return 0; }
+        if (args.Length == 3 && args[0] == "debug" && args[1] == "models" && args[2] == "--bundled") {
+            Console.WriteLine("{\"models\":[{\"slug\":\"online-first\",\"display_name\":\"Online first\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":true,\"tool_mode\":\"code_mode_only\",\"multi_agent_version\":\"v2\",\"supports_search_tool\":true},{\"slug\":\"gpt-5.4-mini\",\"display_name\":\"Legacy compatible\",\"description\":\"fixture\",\"shell_type\":\"unified_exec\",\"use_responses_lite\":false,\"supports_search_tool\":false}]}");
+            return 0;
+        }
         if (Environment.GetEnvironmentVariable("PWB_FAKE_TIMEOUT") == "1") { Thread.Sleep(5000); return 0; }
         if (Environment.GetEnvironmentVariable("PWB_FAKE_FLOOD") == "1") { Console.Write(new string('x', 8192)); return 0; }
         Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake\"}");
@@ -178,6 +182,17 @@ public static class FakeCodex {
         Assert-True ($capture.captureStatus -eq 'Completed') 'Bounded runner legitimate control failed.'
         $validated=Invoke-EvidenceValidation -MetadataPath $capture.MetadataPath -Parameters @{ExpectedExecutableSha256=(Get-FileHash $fakeCli -Algorithm SHA256).Hash;ExpectedCodexVersion='0.0.0';ExpectedModelId='fixture-model';ExpectedModelDigest='fixture-digest';ExpectedEffectiveContext=4096;ExpectedCatalogSha256=$catalogSha256;ExpectedFinalText='EXACT_OK';RequireExactFinalText=$true}
         Assert-True $validated.Passed 'Captured legitimate control did not validate.'
+
+        $generatedCatalogPath=Join-Path $tempRoot 'generated-local-catalog.json'
+        $generatedCatalog=& $catalogGenerator -Model 'qwen3.5:9b' -ContextWindow 131072 -CodexPath $fakeCli -OutputPath $generatedCatalogPath
+        $generatedModel=((Get-Content -LiteralPath $generatedCatalog.CatalogPath -Raw)|ConvertFrom-Json).models|Select-Object -First 1
+        $generatedManifest=Get-Content -LiteralPath $generatedCatalog.ManifestPath -Raw|ConvertFrom-Json
+        Assert-True ($generatedManifest.baseModelSlug -eq 'gpt-5.4-mini') 'Catalog generator did not prefer the legacy-compatible unified_exec template.'
+        Assert-True (-not $generatedModel.use_responses_lite) 'Generated local catalog retained Responses Lite.'
+        Assert-True ($null -eq $generatedModel.PSObject.Properties['tool_mode']) 'Generated local catalog retained code-mode transport.'
+        Assert-True ($null -eq $generatedModel.PSObject.Properties['multi_agent_version']) 'Generated local catalog retained multi-agent transport.'
+        Assert-True (-not $generatedModel.supports_search_tool) 'Generated local catalog retained search-tool support.'
+        Assert-True ($generatedManifest.unassertedCapabilities -contains 'responses-lite') 'Catalog manifest did not record unasserted Responses Lite transport.'
 
         $env:PWB_FAKE_FLOOD='1'
         try{$limited=& $runner -Prompt 'flood' -ModelId x -ModelDigest x -ProviderId x -Endpoint 'http://127.0.0.1:1' -EffectiveContext 1 -WorkingDirectory $tempRoot -OutputDirectory (Join-Path $tempRoot flood) -CodexPath $fakeCli -MaxStdoutBytes 1024 -MaxStderrBytes 1024 -MaxTotalOutputBytes 2048}
