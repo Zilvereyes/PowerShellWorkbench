@@ -23,7 +23,7 @@ try {
     foreach($command in $forbidden){Assert-True ($commands -notcontains $command) "Handoff generator contains forbidden execution or transport command '$command'."}
 
     $inputPath=Join-Path $tempRoot 'input.json'
-    $input=[ordered]@{
+    $handoffFixture=[ordered]@{
         schemaVersion='1.0';handoffId='deterministic-fixture';createdAt='2026-09-03T00:00:00Z'
         source=[ordered]@{taskId='source-id';title='Source task'};destination=[ordered]@{taskId='destination-id';title='Destination task'}
         project=[ordered]@{root=$tempRoot;pluginVersion='0.7.0';pluginSha256=('a'*64)}
@@ -34,7 +34,7 @@ try {
         unresolvedDecisions=@('Whether to transport the artifact.');authorityBoundaries=@('Code owns pass and fail.')
         safetyBoundaries=@('No execution or transport.');requestedActions=@('Review locally.');reloadCanary='PWB_HANDOFF_RELOAD_OK'
     }
-    $input|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $inputPath -Encoding UTF8
+    $handoffFixture|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $inputPath -Encoding UTF8
 
     $whatIfOutput=Join-Path $tempRoot 'what-if-output'
     & $generator -InputPath $inputPath -OutputDirectory $whatIfOutput -WhatIf
@@ -56,7 +56,7 @@ try {
     Assert-True (($embedded|ConvertTo-Json -Depth 12 -Compress) -eq ($artifact.payload|ConvertTo-Json -Depth 12 -Compress)) 'JSON and Markdown handoffs are not semantically equivalent.'
     Assert-True ($markdown.Contains($artifact.payloadSha256)) 'Markdown handoff does not carry the JSON payload hash.'
 
-    $invalid=$input.PSObject.Copy();$invalid.testResults=@([ordered]@{name='Fixture';runtime='PS';status='Unknown';evidenceSha256=('d'*64)})
+    $invalid=$handoffFixture.PSObject.Copy();$invalid.testResults=@([ordered]@{name='Fixture';runtime='PS';status='Unknown';evidenceSha256=('d'*64)})
     $invalidPath=Join-Path $tempRoot 'invalid.json';$invalid|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $invalidPath -Encoding UTF8
     $rejected=$false;try{& $generator -InputPath $invalidPath -OutputDirectory (Join-Path $tempRoot 'invalid-output') -Confirm:$false|Out-Null}catch{$rejected=$true}
     Assert-True $rejected 'Unknown test status did not fail closed.'

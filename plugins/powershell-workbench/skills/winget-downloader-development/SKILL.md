@@ -5,7 +5,9 @@ description: Modernize WingetDownloader with explicit exports, help, tests, stru
 
 # WingetDownloader Development
 
-Resolve the active source with `../../scripts/Resolve-PowerShellWorkbenchContext.ps1 -RequestedProfile WingetDownloader`. Treat `WingetDownloader.psm1` and `WingetDownloader.psd1` as authoritative. Use `WingetDownloader_Chat_Knowledge_Base` only to explain history, compare proposals, or recover rationale after checking live source. If discovery fails, ask for the current project root instead of falling back to another laptop's path.
+Resolve the active source with `../../scripts/Resolve-PowerShellWorkbenchContext.ps1 -RequestedProfile WingetDownloader`. Treat `WingetDownloader.psm1`
+and `WingetDownloader.psd1` as authoritative. Use `WingetDownloader_Chat_Knowledge_Base` only to explain history, compare proposals, or recover rationale
+after checking live source. If discovery fails, ask for the current project root instead of falling back to another laptop's path.
 
 Prioritize work in this order unless the user specifies otherwise:
 

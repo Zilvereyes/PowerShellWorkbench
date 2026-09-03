@@ -12,10 +12,7 @@
     "longDescription": "Generate reusable PowerShell artifacts, discover and refactor single or multi-project workspaces, diagnose toolchains, build safe PowerShell agent harnesses, package the plugin for another machine, and run quality or security gates only when requested.",
     "developerName": "Zilvereyes",
     "category": "Productivity",
-    "capabilities": [
-      "Interactive",
-      "Write"
-    ],
+    "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
       "Create a dual-compatible PowerShell function.",
       "Safely edit this compact PowerShell file with minimal churn.",

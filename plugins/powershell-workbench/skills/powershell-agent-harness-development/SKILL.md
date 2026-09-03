@@ -18,7 +18,11 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
 ## Packaged artifacts
 
 - Use `../../scripts/Resolve-PowerShellWorkbenchCodexDesktop.ps1` to locate the deterministic Codex Desktop binary. Do not use a PATH/npm Codex installation unless a task explicitly supplies `-CodexPath`.
-- Use `../../scripts/New-PowerShellWorkbenchLocalModelCatalog.ps1` to derive a local-model catalog from that binary's `debug models --bundled` schema. It prefers a legacy-compatible unified-exec template, removes unasserted Responses Lite/code-mode/multi-agent/cloud-service-tier transport claims, and fails closed if the serialized catalog retains an unsupported Ollama transport property. Omit `-ExpectedCodexSha256` for normal deterministic Desktop discovery, or supply it only when a separately certified executable digest is available. Supply certified model and context values; do not invent reasoning levels, speed tiers, modalities, or online-only tool claims.
+- Use `../../scripts/New-PowerShellWorkbenchLocalModelCatalog.ps1` to derive a local-model catalog from that binary's `debug models --bundled` schema.
+  It prefers a legacy-compatible unified-exec template, removes unasserted Responses Lite/code-mode/multi-agent/cloud-service-tier transport claims,
+  and fails closed if the serialized catalog retains an unsupported Ollama transport property. Omit `-ExpectedCodexSha256` for normal deterministic
+  Desktop discovery, or supply it only when a separately certified executable digest is available. Supply certified model and context values; do not
+  invent reasoning levels, speed tiers, modalities, or online-only tool claims.
 - Use `../../scripts/Invoke-PowerShellWorkbenchCodexJson.ps1` to capture a bounded `codex exec --json` run. It requires PowerShell 7 because reliable argument passing, asynchronous waits, cancellation, and process-tree termination use modern .NET APIs. Supply `-CatalogManifestPath` when the run relies on a generated local model catalog.
 - Use `../../scripts/Test-PowerShellWorkbenchCodexEvidence.ps1` separately to validate the capture. A process exit code of zero and a plausible final message are insufficient when any tool, policy, approval, schema, or turn event failed.
 - `-AllowedAdvisoryRegex` is an opt-in, exact advisory mechanism for known host notices only. It can never allow tool, policy, approval, schema, or turn failures; keep each pattern as narrow as the observed advisory text.

@@ -56,7 +56,9 @@ Then start a new Codex task.
 
 PowerShell Workbench includes a PowerShell 7 runner for `codex exec --json` and a separate PowerShell 5.1/7 evidence validator. The runner closes stdin, streams stdout and stderr into byte-bounded files, terminates the process tree on timeout or output overflow, and records executable plus artifact hashes.
 
-Validation fails closed on artifact or executable substitution, process/tool failures, orphaned or duplicate tool events, missing success state, excessive or malformed JSONL, incomplete turn lifecycle, insufficient tool calls, unexpected final text, and optionally retries. Model, provider, endpoint, and context remain explicitly unverified caller declarations unless a future provider supplies trusted attestation.
+Validation fails closed on artifact or executable substitution, process/tool failures, orphaned or duplicate tool events, missing success state,
+excessive or malformed JSONL, incomplete turn lifecycle, insufficient tool calls, unexpected final text, and optionally retries. Model, provider,
+endpoint, and context remain explicitly unverified caller declarations unless a future provider supplies trusted attestation.
 
 ```powershell
 $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `

@@ -162,15 +162,16 @@ try {
         -ApplyScopedEdit { throw 'WhatIf invoked provider edit.' } -PostCheck { throw 'WhatIf invoked post-check.' } `
         -GetOwnedState { throw 'WhatIf invoked owned-state reader.' } -WhatIf
     Assert-True (-not (Test-Path -LiteralPath $whatIfBackupDirectory)) 'Provider -WhatIf created a backup directory.'
-    $global:PwbApplyInvocationCount=0
+    $applyInvocation=[pscustomobject]@{Count=0}
     $ownedStateReader={
         param($path,$keys)
+        [void]$keys
         $state=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json
         [pscustomobject]@{providerId=$state.provider;modelId=$state.model;effectiveContext=[int]$state.context;ownedValues=$state}
     }
     $applyResult=& $providerScript -ConfigPath $configPath -BackupDirectory $backupDirectory `
         -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
-        -ApplyScopedEdit { param($path) $global:PwbApplyInvocationCount++;Set-Content -LiteralPath $path -Value '{"provider":"ollama","model":"fixture-model","context":131072}' -Encoding UTF8 } `
+        -ApplyScopedEdit { param($path) $applyInvocation.Count++;Set-Content -LiteralPath $path -Value '{"provider":"ollama","model":"fixture-model","context":131072}' -Encoding UTF8 } `
         -PostCheck { param($path) ((Get-Content -LiteralPath $path -Raw|ConvertFrom-Json).provider -eq 'ollama') } `
         -GetOwnedState $ownedStateReader -Confirm:$false
     Assert-True ($applyResult.phase -eq 'Ready') 'Provider apply transaction did not reach Ready.'
@@ -181,7 +182,7 @@ try {
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $journal -ResumeDecision `
         -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
     Assert-True ($resume.decision -eq 'AlreadyReady' -and -not $resume.applyRequired) 'A verified Ready transaction was not recognized read-only.'
-    Assert-True ($global:PwbApplyInvocationCount -eq 1) 'Resume decision repeated the provider switch.'
+    Assert-True ($applyInvocation.Count -eq 1) 'Resume decision repeated the provider switch.'
     $missing=& $providerScript -ConfigPath $configPath -TransactionPath (Join-Path $backupDirectory 'missing.transaction.json') -ResumeDecision `
         -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
     Assert-True (-not $missing.eligible -and @($missing.failedGates).Count -eq 1 -and $missing.failedGates[0] -eq 'TransactionJournalPresent') 'Missing journal did not fail closed with its exact gate.'
@@ -195,7 +196,7 @@ try {
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
         -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
     Assert-True ($resume.decision -eq 'PostCheckRequired' -and -not $resume.applyRequired -and $resume.postCheckRequired) 'Interrupted-after-commit resume attempted to repeat the provider switch.'
-    Assert-True ($global:PwbApplyInvocationCount -eq 1) 'Interrupted resume executed the provider edit.'
+    Assert-True ($applyInvocation.Count -eq 1) 'Interrupted resume executed the provider edit.'
 
     $unknownPath=Join-Path $backupDirectory 'unknown.transaction.json'
     $unknown=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json;$unknown.phase='UnknownPhase'
@@ -226,7 +227,7 @@ try {
         & $providerScript -ConfigPath $configPath -BackupDirectory (Join-Path $tempRoot 'nonboolean-transactions') `
             -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
             -ApplyScopedEdit { param($path) Set-Content -LiteralPath $path -Value '{"provider":"ollama","model":"fixture-model","context":131072}' -Encoding UTF8 } `
-            -PostCheck { param($path) 'true' } -GetOwnedState $ownedStateReader -Confirm:$false|Out-Null
+            -PostCheck { param($path) [void]$path; 'true' } -GetOwnedState $ownedStateReader -Confirm:$false|Out-Null
     } catch { $nonBooleanRejected=$true }
     Assert-True $nonBooleanRejected 'A non-Boolean provider post-check was accepted.'
     Assert-True ((Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json).provider -eq 'original') 'Failed non-Boolean post-check did not restore the backup.'

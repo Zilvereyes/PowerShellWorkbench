@@ -73,7 +73,7 @@ function Get-RequiredProperty {
     $property.Value
 }
 
-function Assert-AllowedProperties {
+function Assert-PropertyAllowlist {
     param([object]$InputObject,[string[]]$Allowed,[string]$Context)
     foreach ($property in $InputObject.PSObject.Properties) {
         if ($Allowed -notcontains $property.Name) { throw "$Context contains unknown property '$($property.Name)'." }
@@ -95,24 +95,24 @@ function Assert-Sha256 {
 
 function Convert-Task {
     param([object]$Value,[string]$Context)
-    Assert-AllowedProperties $Value @('taskId','title') $Context
+    Assert-PropertyAllowlist -InputObject $Value -Allowed @('taskId','title') -Context $Context
     [ordered]@{
-        taskId = Assert-Text (Get-RequiredProperty $Value 'taskId' $Context) "$Context.taskId"
-        title = Assert-Text (Get-RequiredProperty $Value 'title' $Context) "$Context.title"
+        taskId = Assert-Text -Value (Get-RequiredProperty -InputObject $Value -Name 'taskId' -Context $Context) -Context "$Context.taskId"
+        title = Assert-Text -Value (Get-RequiredProperty -InputObject $Value -Name 'title' -Context $Context) -Context "$Context.title"
     }
 }
 
 function Convert-FileEvidence {
     param([object]$Value,[string]$Context)
-    Assert-AllowedProperties $Value @('path','sha256') $Context
-    $path = Assert-Text (Get-RequiredProperty $Value 'path' $Context) "$Context.path"
+    Assert-PropertyAllowlist -InputObject $Value -Allowed @('path','sha256') -Context $Context
+    $path = Assert-Text -Value (Get-RequiredProperty -InputObject $Value -Name 'path' -Context $Context) -Context "$Context.path"
     if ([IO.Path]::IsPathRooted($path) -or $path -match '^[A-Za-z]:' -or $path -match '(^|[\\/])\.\.([\\/]|$)') { throw "$Context.path must be a portable relative path." }
-    [ordered]@{path=$path.Replace('\','/');sha256=Assert-Sha256 (Get-RequiredProperty $Value 'sha256' $Context) "$Context.sha256"}
+    [ordered]@{path=$path.Replace('\','/');sha256=Assert-Sha256 -Value (Get-RequiredProperty -InputObject $Value -Name 'sha256' -Context $Context) -Context "$Context.sha256"}
 }
 
 function Convert-StringArray {
     param([object[]]$Value,[string]$Context)
-    @($Value | ForEach-Object { Assert-Text $_ $Context })
+    @($Value | ForEach-Object { Assert-Text -Value $_ -Context $Context })
 }
 
 $resolvedInput = (Resolve-Path -LiteralPath $InputPath).Path
@@ -124,10 +124,10 @@ $schemaSha256 = (Get-FileHash -LiteralPath $resolvedSchema -Algorithm SHA256).Ha
 $inputObject = Get-Content -LiteralPath $resolvedInput -Raw | ConvertFrom-Json
 
 $allowedTopLevel = @('schemaVersion','handoffId','createdAt','source','destination','project','objective','verifiedFacts','changedFiles','testResults','unresolvedDecisions','authorityBoundaries','safetyBoundaries','requestedActions','reloadCanary')
-Assert-AllowedProperties $inputObject $allowedTopLevel 'Handoff'
-foreach ($name in $allowedTopLevel) { [void](Get-RequiredProperty $inputObject $name 'Handoff') }
+Assert-PropertyAllowlist -InputObject $inputObject -Allowed $allowedTopLevel -Context 'Handoff'
+foreach ($name in $allowedTopLevel) { [void](Get-RequiredProperty -InputObject $inputObject -Name $name -Context 'Handoff') }
 if ([string]$inputObject.schemaVersion -ne '1.0') { throw 'Unsupported handoff schema version.' }
-$handoffId = Assert-Text $inputObject.handoffId 'Handoff.handoffId'
+$handoffId = Assert-Text -Value $inputObject.handoffId -Context 'Handoff.handoffId'
 if ($handoffId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw 'Handoff.handoffId is not a portable identifier.' }
 $createdAtValue = $inputObject.createdAt
 if ($createdAtValue -is [datetimeoffset]) { $createdAt = [datetimeoffset]$createdAtValue }
@@ -139,42 +139,42 @@ else {
     catch { throw 'Handoff.createdAt must be a valid ISO date-time.' }
 }
 
-$project = Get-RequiredProperty $inputObject 'project' 'Handoff'
-Assert-AllowedProperties $project @('root','pluginVersion','pluginSha256') 'Handoff.project'
-$projectRoot = Assert-Text (Get-RequiredProperty $project 'root' 'Handoff.project') 'Handoff.project.root'
+$project = Get-RequiredProperty -InputObject $inputObject -Name 'project' -Context 'Handoff'
+Assert-PropertyAllowlist -InputObject $project -Allowed @('root','pluginVersion','pluginSha256') -Context 'Handoff.project'
+$projectRoot = Assert-Text -Value (Get-RequiredProperty -InputObject $project -Name 'root' -Context 'Handoff.project') -Context 'Handoff.project.root'
 if (-not [IO.Path]::IsPathRooted($projectRoot)) { throw 'Handoff.project.root must be absolute.' }
 
 $facts = foreach ($fact in @($inputObject.verifiedFacts)) {
-    Assert-AllowedProperties $fact @('statement','evidence') 'Verified fact'
-    $statement = Assert-Text (Get-RequiredProperty $fact 'statement' 'Verified fact') 'Verified fact.statement'
-    $factEvidence = Get-RequiredProperty $fact 'evidence' 'Verified fact'
-    $evidence = @($factEvidence | ForEach-Object { Convert-FileEvidence $_ 'Verified fact evidence' })
+    Assert-PropertyAllowlist -InputObject $fact -Allowed @('statement','evidence') -Context 'Verified fact'
+    $statement = Assert-Text -Value (Get-RequiredProperty -InputObject $fact -Name 'statement' -Context 'Verified fact') -Context 'Verified fact.statement'
+    $factEvidence = Get-RequiredProperty -InputObject $fact -Name 'evidence' -Context 'Verified fact'
+    $evidence = @($factEvidence | ForEach-Object { Convert-FileEvidence -Value $_ -Context 'Verified fact evidence' })
     if ($evidence.Count -eq 0) { throw 'Verified fact evidence cannot be empty.' }
     [ordered]@{statement=$statement;evidence=$evidence}
 }
-$changedFiles = @($inputObject.changedFiles | ForEach-Object { Convert-FileEvidence $_ 'Changed file' })
+$changedFiles = @($inputObject.changedFiles | ForEach-Object { Convert-FileEvidence -Value $_ -Context 'Changed file' })
 $tests = foreach ($test in @($inputObject.testResults)) {
-    Assert-AllowedProperties $test @('name','runtime','status','evidenceSha256') 'Test result'
-    $status = Assert-Text (Get-RequiredProperty $test 'status' 'Test result') 'Test result.status'
+    Assert-PropertyAllowlist -InputObject $test -Allowed @('name','runtime','status','evidenceSha256') -Context 'Test result'
+    $status = Assert-Text -Value (Get-RequiredProperty -InputObject $test -Name 'status' -Context 'Test result') -Context 'Test result.status'
     if (@('Passed','Failed','Blocked','NotRun') -notcontains $status) { throw "Unknown test status '$status'." }
     [ordered]@{
-        name=Assert-Text (Get-RequiredProperty $test 'name' 'Test result') 'Test result.name'
-        runtime=Assert-Text (Get-RequiredProperty $test 'runtime' 'Test result') 'Test result.runtime'
+        name=Assert-Text -Value (Get-RequiredProperty -InputObject $test -Name 'name' -Context 'Test result') -Context 'Test result.name'
+        runtime=Assert-Text -Value (Get-RequiredProperty -InputObject $test -Name 'runtime' -Context 'Test result') -Context 'Test result.runtime'
         status=$status
-        evidenceSha256=Assert-Sha256 (Get-RequiredProperty $test 'evidenceSha256' 'Test result') 'Test result.evidenceSha256'
+        evidenceSha256=Assert-Sha256 -Value (Get-RequiredProperty -InputObject $test -Name 'evidenceSha256' -Context 'Test result') -Context 'Test result.evidenceSha256'
     }
 }
 
 $payload = [ordered]@{
     schemaVersion='1.0';handoffId=$handoffId;createdAt=$createdAt.ToUniversalTime().ToString('o',[Globalization.CultureInfo]::InvariantCulture)
-    source=Convert-Task $inputObject.source 'Handoff.source';destination=Convert-Task $inputObject.destination 'Handoff.destination'
-    project=[ordered]@{root=$projectRoot;pluginVersion=Assert-Text (Get-RequiredProperty $project 'pluginVersion' 'Handoff.project') 'Handoff.project.pluginVersion';pluginSha256=Assert-Sha256 (Get-RequiredProperty $project 'pluginSha256' 'Handoff.project') 'Handoff.project.pluginSha256'}
-    objective=Assert-Text $inputObject.objective 'Handoff.objective';verifiedFacts=@($facts);changedFiles=@($changedFiles);testResults=@($tests)
-    unresolvedDecisions=@(Convert-StringArray @($inputObject.unresolvedDecisions) 'Handoff.unresolvedDecisions')
-    authorityBoundaries=@(Convert-StringArray @($inputObject.authorityBoundaries) 'Handoff.authorityBoundaries')
-    safetyBoundaries=@(Convert-StringArray @($inputObject.safetyBoundaries) 'Handoff.safetyBoundaries')
-    requestedActions=@(Convert-StringArray @($inputObject.requestedActions) 'Handoff.requestedActions')
-    reloadCanary=Assert-Text $inputObject.reloadCanary 'Handoff.reloadCanary'
+    source=Convert-Task -Value $inputObject.source -Context 'Handoff.source';destination=Convert-Task -Value $inputObject.destination -Context 'Handoff.destination'
+    project=[ordered]@{root=$projectRoot;pluginVersion=Assert-Text -Value (Get-RequiredProperty -InputObject $project -Name 'pluginVersion' -Context 'Handoff.project') -Context 'Handoff.project.pluginVersion';pluginSha256=Assert-Sha256 -Value (Get-RequiredProperty -InputObject $project -Name 'pluginSha256' -Context 'Handoff.project') -Context 'Handoff.project.pluginSha256'}
+    objective=Assert-Text -Value $inputObject.objective -Context 'Handoff.objective';verifiedFacts=@($facts);changedFiles=@($changedFiles);testResults=@($tests)
+    unresolvedDecisions=@(Convert-StringArray -Value @($inputObject.unresolvedDecisions) -Context 'Handoff.unresolvedDecisions')
+    authorityBoundaries=@(Convert-StringArray -Value @($inputObject.authorityBoundaries) -Context 'Handoff.authorityBoundaries')
+    safetyBoundaries=@(Convert-StringArray -Value @($inputObject.safetyBoundaries) -Context 'Handoff.safetyBoundaries')
+    requestedActions=@(Convert-StringArray -Value @($inputObject.requestedActions) -Context 'Handoff.requestedActions')
+    reloadCanary=Assert-Text -Value $inputObject.reloadCanary -Context 'Handoff.reloadCanary'
 }
 $payloadJson = ConvertTo-CanonicalJson $payload
 $payloadSha256 = Get-Sha256Text -Text $payloadJson
