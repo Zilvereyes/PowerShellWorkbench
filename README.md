@@ -42,6 +42,7 @@ Then start a new Codex task.
 - Scaffold scripts, advanced functions, modules, manifests, tests, contracts, documentation, lint configuration, and CI files.
 - Refactor PowerShell while preserving behavior, compatibility, exports, and safety boundaries.
 - Make precise, low-churn edits to compact or generated code when normal patch context is fragile.
+- Validate patch bytes, envelopes, target uniqueness, invocation mode, and host adapter read-only before applying a rejected patch.
 - Discover mixed-language project context without embedding workstation-specific paths.
 - Apply RecoveryToolkit and WingetDownloader conventions when those projects are detected.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
@@ -89,6 +90,15 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 
 & '<plugin-root>\scripts\Get-PowerShellWorkbenchProjectInventory.ps1' `
     -Root 'C:\ProjectOne','C:\ProjectTwo'
+
+$patchDecision = & '<plugin-root>\scripts\Test-PowerShellWorkbenchPatch.ps1' `
+    -PatchPath 'C:\staging\change.patch' `
+    -InvocationMode DirectArgument `
+    -HostAdapter DedicatedTool
+
+if (-not $patchDecision.Eligible) {
+    $patchDecision.FailedGates
+}
 ```
 
 ## Repository layout
