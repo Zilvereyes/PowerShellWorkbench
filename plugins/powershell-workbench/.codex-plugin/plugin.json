@@ -15,8 +15,7 @@
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
       "Create a dual-compatible PowerShell function.",
-      "Safely edit this compact PowerShell file with minimal churn.",
-      "Diagnose this rejected patch without applying it.",
+      "Safely diagnose and edit this rejected or compact PowerShell patch with minimal churn.",
       "Run the PowerShell quality gate."
     ]
   }

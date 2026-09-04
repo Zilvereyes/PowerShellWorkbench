@@ -47,11 +47,11 @@ try {
     $safeTransport = @{ InvocationMode = 'DirectArgument'; HostAdapter = 'DedicatedTool' }
 
     $unknownTransport = & $validator -PatchText $validPatch
-    Assert-FailedGatesExactly $unknownTransport @('InvocationModeKnown', 'HostAdapterKnown') 'Missing transport metadata did not fail closed.'
+    Assert-FailedGatesExactly -Result $unknownTransport -Expected @('InvocationModeKnown', 'HostAdapterKnown') -Message 'Missing transport metadata did not fail closed.'
 
     $direct = & $validator -PatchText $validPatch @safeTransport
     Assert-True $direct.Eligible 'Valid direct-argument patch was rejected.'
-    Assert-FailedGatesExactly $direct @() 'Valid direct-argument patch failed unexpectedly.'
+    Assert-FailedGatesExactly -Result $direct -Expected @() -Message 'Valid direct-argument patch failed unexpectedly.'
     Assert-True ($direct.DetectedEncoding -eq 'Utf8NoBomReencodedText' -and $direct.EncodingEvidence -eq 'ReencodedText' -and $direct.OperationCount -eq 1) 'Valid patch metadata was not preserved.'
     Assert-True ($direct.TargetPaths.Count -eq 1 -and $direct.TargetPaths[0] -eq 'scripts/example.ps1') 'Valid patch target was not preserved.'
     Assert-True (-not $direct.ExecutionOccurred -and -not $direct.TransportPerformed -and -not $direct.TargetMutation) 'Patch validator violated its read-only contract.'
@@ -60,24 +60,24 @@ try {
     foreach ($mode in @('Pipeline', 'StandardInput', 'ShellText')) {
         $rejectedMode = & $validator -PatchText $validPatch -InvocationMode $mode -HostAdapter DedicatedTool
         Assert-True (-not $rejectedMode.Eligible) "Invocation mode '$mode' did not fail closed."
-        Assert-FailedGatesExactly $rejectedMode @('InvocationModeDirectArgument') "Invocation mode '$mode' propagated the wrong failed gate."
+        Assert-FailedGatesExactly -Result $rejectedMode -Expected @('InvocationModeDirectArgument') -Message "Invocation mode '$mode' propagated the wrong failed gate."
     }
 
     $batchWrapperResult = & $validator -PatchText $validPatch -InvocationMode DirectArgument -HostAdapter WindowsBatchWrapper
     Assert-True (-not $batchWrapperResult.Eligible) 'Windows batch wrapper did not fail closed.'
-    Assert-FailedGatesExactly $batchWrapperResult @('HostAdapterMultilineArgumentSafe') 'Windows batch wrapper propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $batchWrapperResult -Expected @('HostAdapterMultilineArgumentSafe') -Message 'Windows batch wrapper propagated the wrong failed gate.'
 
     $nativeResult = & $validator -PatchText $validPatch -InvocationMode DirectArgument -HostAdapter NativeExecutable
     Assert-True $nativeResult.Eligible 'Native executable direct-argument adapter was rejected.'
-    Assert-FailedGatesExactly $nativeResult @() 'Native executable direct-argument adapter failed unexpectedly.'
+    Assert-FailedGatesExactly -Result $nativeResult -Expected @() -Message 'Native executable direct-argument adapter failed unexpectedly.'
 
     $missingEnvelope = $validPatch -replace '\*\*\* End Patch$', '*** End Patched'
     $envelopeResult = & $validator -PatchText $missingEnvelope @safeTransport
-    Assert-FailedGatesExactly $envelopeResult @('PatchEnvelope') 'Malformed patch envelope propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $envelopeResult -Expected @('PatchEnvelope') -Message 'Malformed patch envelope propagated the wrong failed gate.'
 
     $noOperation = "*** Begin Patch`n`n*** End Patch"
     $noOperationResult = & $validator -PatchText $noOperation @safeTransport
-    Assert-FailedGatesExactly $noOperationResult @('PatchHasOperation') 'Operation-free patch propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $noOperationResult -Expected @('PatchHasOperation') -Message 'Operation-free patch propagated the wrong failed gate.'
 
     $duplicateTarget = @'
 *** Begin Patch
@@ -89,7 +89,7 @@ try {
 *** End Patch
 '@.TrimEnd("`r", "`n")
     $duplicateResult = & $validator -PatchText $duplicateTarget @safeTransport
-    Assert-FailedGatesExactly $duplicateResult @('PatchSingleOperationPerTarget') 'Duplicate patch target propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $duplicateResult -Expected @('PatchSingleOperationPerTarget') -Message 'Duplicate patch target propagated the wrong failed gate.'
 
     $aliasedDuplicateTarget = @'
 *** Begin Patch
@@ -101,7 +101,7 @@ try {
 *** End Patch
 '@.TrimEnd("`r", "`n")
     $aliasedDuplicateResult = & $validator -PatchText $aliasedDuplicateTarget @safeTransport
-    Assert-FailedGatesExactly $aliasedDuplicateResult @('PatchSingleOperationPerTarget') 'Aliased Windows patch target did not fail closed.'
+    Assert-FailedGatesExactly -Result $aliasedDuplicateResult -Expected @('PatchSingleOperationPerTarget') -Message 'Aliased Windows patch target did not fail closed.'
 
     $escapingTarget = @'
 *** Begin Patch
@@ -112,7 +112,7 @@ try {
 *** End Patch
 '@.TrimEnd("`r", "`n")
     $escapingTargetResult = & $validator -PatchText $escapingTarget @safeTransport
-    Assert-FailedGatesExactly $escapingTargetResult @('PatchTargetPathCanonical') 'Escaping target path propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $escapingTargetResult -Expected @('PatchTargetPathCanonical') -Message 'Escaping target path propagated the wrong failed gate.'
 
     $validPath = Join-Path $tempRoot 'valid.patch'
     [IO.File]::WriteAllText($validPath, $validPatch, (New-Object Text.UTF8Encoding($false)))
@@ -128,24 +128,24 @@ try {
     $utf8BomPath = Join-Path $tempRoot 'utf8-bom.patch'
     [IO.File]::WriteAllText($utf8BomPath, $validPatch, (New-Object Text.UTF8Encoding($true)))
     $utf8BomResult = & $validator -PatchPath $utf8BomPath @safeTransport
-    Assert-FailedGatesExactly $utf8BomResult @('PatchEncodingUtf8NoBom') 'UTF-8 BOM propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $utf8BomResult -Expected @('PatchEncodingUtf8NoBom') -Message 'UTF-8 BOM propagated the wrong failed gate.'
 
     $utf16Path = Join-Path $tempRoot 'utf16.patch'
     [IO.File]::WriteAllText($utf16Path, $validPatch, [Text.Encoding]::Unicode)
     $utf16Result = & $validator -PatchPath $utf16Path @safeTransport
-    Assert-FailedGatesExactly $utf16Result @('PatchEncodingUtf8NoBom') 'UTF-16 propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $utf16Result -Expected @('PatchEncodingUtf8NoBom') -Message 'UTF-16 propagated the wrong failed gate.'
 
     $missingPathResult = & $validator -PatchPath (Join-Path $tempRoot 'missing.patch') @safeTransport
-    Assert-FailedGatesExactly $missingPathResult @('PatchFileExists') 'Missing patch file propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $missingPathResult -Expected @('PatchFileExists') -Message 'Missing patch file propagated the wrong failed gate.'
 
     $oversizedTextResult = & $validator -PatchText $validPatch -MaximumBytes 8 @safeTransport
-    Assert-FailedGatesExactly $oversizedTextResult @('PatchWithinByteLimit') 'Oversized text patch propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $oversizedTextResult -Expected @('PatchWithinByteLimit') -Message 'Oversized text patch propagated the wrong failed gate.'
     Assert-True ($null -eq $oversizedTextResult.PatchSha256) 'Oversized text patch was hashed after failing its byte limit.'
 
     $oversizedPath = Join-Path $tempRoot 'oversized.patch'
     [IO.File]::WriteAllBytes($oversizedPath, (New-Object byte[] 9))
     $oversizedPathResult = & $validator -PatchPath $oversizedPath -MaximumBytes 8 @safeTransport
-    Assert-FailedGatesExactly $oversizedPathResult @('PatchWithinByteLimit') 'Oversized patch file propagated the wrong failed gate.'
+    Assert-FailedGatesExactly -Result $oversizedPathResult -Expected @('PatchWithinByteLimit') -Message 'Oversized patch file propagated the wrong failed gate.'
     Assert-True ($null -eq $oversizedPathResult.PatchSha256 -and $oversizedPathResult.ByteLength -eq 9) 'Oversized patch file was read or lost its observed length.'
 
     'PowerShell Workbench patch contracts passed.'
