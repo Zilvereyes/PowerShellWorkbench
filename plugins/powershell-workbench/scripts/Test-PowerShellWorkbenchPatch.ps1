@@ -50,6 +50,44 @@ function ConvertTo-PatchTargetIdentity {
     return (($stack -join '/').ToLowerInvariant())
 }
 
+function Read-BoundedPatchFile {
+    param(
+        [string]$LiteralPath,
+        [long]$ByteLimit
+    )
+
+    $stream = New-Object IO.FileStream($LiteralPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $initialLength = $stream.Length
+        if ($initialLength -gt $ByteLimit) {
+            return [pscustomobject]@{ Bytes = $null; ByteLength = $initialLength; OverLimit = $true; Stable = $true }
+        }
+
+        $buffer = New-Object byte[] ([int]($ByteLimit + 1))
+        $totalRead = 0
+        while ($totalRead -lt $buffer.Length) {
+            $read = $stream.Read($buffer, $totalRead, $buffer.Length - $totalRead)
+            if ($read -eq 0) { break }
+            $totalRead += $read
+        }
+
+        if ($totalRead -gt $ByteLimit) {
+            return [pscustomobject]@{ Bytes = $null; ByteLength = $totalRead; OverLimit = $true; Stable = $false }
+        }
+
+        $finalLength = $stream.Length
+        if ($initialLength -ne $finalLength -or $totalRead -ne $finalLength) {
+            return [pscustomobject]@{ Bytes = $null; ByteLength = $totalRead; OverLimit = $false; Stable = $false }
+        }
+
+        $snapshot = New-Object byte[] $totalRead
+        if ($totalRead -gt 0) { [Array]::Copy($buffer, $snapshot, $totalRead) }
+        return [pscustomobject]@{ Bytes = $snapshot; ByteLength = $totalRead; OverLimit = $false; Stable = $true }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 if ($sourceKind -eq 'Path') {
     try {
         $resolvedPatchPath = [IO.Path]::GetFullPath($PatchPath)
@@ -59,12 +97,14 @@ if ($sourceKind -eq 'Path') {
 
     if ($resolvedPatchPath -and (Test-Path -LiteralPath $resolvedPatchPath -PathType Leaf)) {
         try {
-            $fileInfo = Get-Item -LiteralPath $resolvedPatchPath
-            $byteLength = $fileInfo.Length
-            if ($byteLength -gt $MaximumBytes) {
+            $readResult = Read-BoundedPatchFile -LiteralPath $resolvedPatchPath -ByteLimit $MaximumBytes
+            $byteLength = $readResult.ByteLength
+            if ($readResult.OverLimit) {
                 $failedGates.Add('PatchWithinByteLimit')
+            } elseif (-not $readResult.Stable) {
+                $failedGates.Add('PatchStableDuringRead')
             } else {
-                $bytes = [IO.File]::ReadAllBytes($resolvedPatchPath)
+                $bytes = $readResult.Bytes
             }
         } catch {
             $failedGates.Add('PatchReadable')

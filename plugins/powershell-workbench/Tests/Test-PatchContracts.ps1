@@ -32,6 +32,9 @@ try {
     foreach ($command in $forbidden) {
         Assert-True ($commands -notcontains $command) "Patch validator contains forbidden execution or transport command '$command'."
     }
+    $validatorSource = Get-Content -LiteralPath $validator -Raw
+    Assert-True ($validatorSource -notmatch 'ReadAllBytes') 'Patch validator regressed to an unbounded, separately reopened file read.'
+    Assert-True ($validatorSource -match 'Read-BoundedPatchFile' -and $validatorSource -match 'PatchStableDuringRead') 'Patch validator does not expose its bounded stable-read contract.'
 
     $validPatch = @'
 *** Begin Patch
