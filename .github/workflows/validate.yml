@@ -20,13 +20,13 @@ jobs:
         shell: powershell
         run: |
           & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1' -PluginRoot '.\plugins\powershell-workbench'
-          & '.\plugins\powershell-workbench\Tests\Test-AgentHarnessContracts.ps1'
+          Get-ChildItem '.\plugins\powershell-workbench\Tests\Test-*.ps1' | Sort-Object Name | ForEach-Object { & $_.FullName }
 
       - name: Validate with PowerShell 7
         shell: pwsh
         run: |
           & '.\plugins\powershell-workbench\scripts\Test-PowerShellWorkbenchPlugin.ps1' -PluginRoot '.\plugins\powershell-workbench'
-          & '.\plugins\powershell-workbench\Tests\Test-AgentHarnessContracts.ps1'
+          Get-ChildItem '.\plugins\powershell-workbench\Tests\Test-*.ps1' | Sort-Object Name | ForEach-Object { & $_.FullName }
 
       - name: Smoke-test environment inventory
         shell: pwsh
