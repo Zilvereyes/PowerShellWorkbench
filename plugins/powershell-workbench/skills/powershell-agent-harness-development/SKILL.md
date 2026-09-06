@@ -29,7 +29,11 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
   It remains `ANALYZE_ONLY` unless `-Execute` is explicit, permits only the credential-free literal loopback-IP HTTP `/api/chat` endpoint,
   disables streaming and thinking, and bounds prompt, request, response, timeout, and output tokens. Returned tool calls are evidence only and are never executed.
 - Use `../../scripts/Test-PowerShellWorkbenchOllamaEvidence.ps1` with an independently recorded metadata SHA-256. The response can attest the observed model id but not the model digest; accepting the caller-bound digest requires explicit `-AcceptUnverifiedModelDigest` and must not be reported as runtime attestation.
-- Use `../../scripts/Compare-PowerShellWorkbenchOllamaEvidence.ps1` with [assets/templates/model-comparison-manifest.json.tmpl](assets/templates/model-comparison-manifest.json.tmpl) to compare frozen validated captures for one prompt and request configuration. Quality is decided by the manifest's exact UTF-8 answer hash before performance ranking. Missing evidence or metrics is `UNKNOWN`; hash, path, prompt, identity, or configuration drift is `CONFLICT`. The comparator never retries, calls a model, writes output, or transports evidence.
+- Use `../../scripts/Compare-PowerShellWorkbenchOllamaEvidence.ps1` with
+  [assets/templates/model-comparison-manifest.json.tmpl](assets/templates/model-comparison-manifest.json.tmpl) to compare
+  frozen validated captures for one prompt and request configuration. Quality is decided by the manifest's exact UTF-8
+  answer hash before performance ranking. Missing evidence or metrics is `UNKNOWN`; hash, path, prompt, identity, or
+  configuration drift is `CONFLICT`. The comparator never retries, calls a model, writes output, or transports evidence.
 - For one controlled file-slice proposal, add `-EnableReadFileSliceProposal` to the bounded Ollama request and require `-ExpectReadFileSliceProposal` during evidence validation. The model only proposes `read_file_slice`; it never authorizes or executes it.
 - Use `../../scripts/New-PowerShellWorkbenchReadOnlyToolProposal.ps1` to extract exactly one validated call into deterministic JSON, then `../../scripts/New-PowerShellWorkbenchReadOnlyToolApproval.ps1` to bind a separately reviewed target snapshot. Approval remains preview-only unless `-Approve` is explicit.
 - Use `../../scripts/Resolve-PowerShellWorkbenchReadOnlyToolChain.ps1` for the read-only decision and
@@ -38,7 +42,11 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
   only new evidence under an explicit scoped evidence root, and never performs transport, process launch, target writes,
   provider switching, Desktop lifecycle, or clipboard access.
 - Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` before relying on installed plugin or catalog evidence. Supply explicit distribution source/cache pairs and catalog manifests; require catalog evidence when a downstream run depends on it. Unknown versions, duplicate roots, tree drift, stale manifests, missing artifacts, and hash drift fail closed without changing the installation.
-- Use `../../scripts/Get-PowerShellWorkbenchStatusDashboard.ps1` with an independently hashed [release-provenance template](assets/templates/release-provenance.json.tmpl) to distinguish declared version, found source/cache trees, and validated release identity. It reuses health gates, binds every source tree to one commit/ref provenance record, returns `UNKNOWN` for missing state and `CONFLICT` for drift, and performs no write, execution, or transport.
+- Use `../../scripts/Get-PowerShellWorkbenchStatusDashboard.ps1` with an independently hashed
+  [release-provenance template](assets/templates/release-provenance.json.tmpl) to distinguish declared version, found
+  source/cache trees, and validated release identity. It reuses health gates, binds every source tree to one commit/ref
+  provenance record, returns `UNKNOWN` for missing state and `CONFLICT` for drift, and performs no write, execution, or
+  transport.
 - Use `../../scripts/Get-PowerShellWorkbenchCatalogMigrationPreview.ps1` to assess a schema 1.0 catalog before migration.
   Supply the expected manifest hash, an explicit destination, a scoped allowed write root, and an authoritative reference
   time. The previewer requires fully qualified paths and exact transport scalar types, and rejects stale, future, drifted,

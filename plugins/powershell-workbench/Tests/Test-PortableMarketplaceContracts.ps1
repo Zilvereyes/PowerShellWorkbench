@@ -8,10 +8,10 @@ $pluginValidator=Join-Path $pluginRoot 'scripts\Test-PowerShellWorkbenchPlugin.p
 $healthValidator=Join-Path $pluginRoot 'scripts\Test-PowerShellWorkbenchHealth.ps1'
 $tempRoot=Join-Path ([IO.Path]::GetTempPath()) ('powershell-workbench-portability-'+[guid]::NewGuid().ToString('N'))
 function Assert-True{param([bool]$Condition,[string]$Message)if(-not$Condition){throw $Message}}
-function Assert-Throws{param([scriptblock]$Action,[string]$Pattern,[string]$Message)$caught=$null;try{&$Action}catch{$caught=$_};if(-not$caught-or$caught.Exception.Message-notmatch$Pattern){throw $Message}}
+function Assert-Throw{param([scriptblock]$Action,[string]$Pattern,[string]$Message)$caught=$null;try{&$Action}catch{$caught=$_};if(-not$caught-or$caught.Exception.Message-notmatch$Pattern){throw $Message}}
 function Get-Snapshot{param([string]$Root)if(-not(Test-Path -LiteralPath $Root)){return '<missing>'};@((Get-ChildItem -LiteralPath $Root -Recurse -Force|ForEach-Object{$length=if($_.PSIsContainer){0}else{$_.Length};$hash=if($_.PSIsContainer){''}else{(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash};"$($_.FullName)|$($_.PSIsContainer)|$length|$hash"}|Sort-Object))-join[Environment]::NewLine}
 
-$tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($packager,[ref]$tokens,[ref]$errors)
+$tokens=$null;$errors=$null;$null=[Management.Automation.Language.Parser]::ParseFile($packager,[ref]$tokens,[ref]$errors)
 Assert-True -Condition ($errors.Count-eq 0) -Message 'Portable marketplace packager has parser errors.'
 try{
     New-Item -ItemType Directory -Path $tempRoot|Out-Null
@@ -27,7 +27,7 @@ try{
     $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion '0.7.10' -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Clean install tree identity failed: $($health.FailedGates-join', ')."
     $beforeExisting=Get-Snapshot -Root $destination
-    Assert-Throws -Action {&$packager -Destination $destination -Confirm:$false} -Pattern 'use -Force' -Message 'Existing targets did not require -Force.'
+    Assert-Throw -Action {&$packager -Destination $destination -Confirm:$false} -Pattern 'use -Force' -Message 'Existing targets did not require -Force.'
     Assert-True -Condition ((Get-Snapshot -Root $destination)-ceq$beforeExisting) -Message 'Rejected non-force upgrade changed the destination.'
     $manifestPath=Join-Path $installed.PluginPath '.codex-plugin\plugin.json'
     $oldManifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json;$oldManifest.version='0.7.8';$oldManifest|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $manifestPath -Encoding UTF8
@@ -37,7 +37,7 @@ try{
     Assert-True -Condition ($upgradePreview.State-eq'PREVIEW'-and$upgradePreview.Mode-eq'Upgrade'-and$upgradePreview.ExistingPlugin-and$upgradePreview.ExistingMarketplace) -Message 'Upgrade preview contract failed.'
     Assert-True -Condition ((Get-Snapshot -Root $destination)-ceq$beforeUpgrade) -Message 'Upgrade preview changed the destination.'
     $lock=[IO.File]::Open($installed.MarketplacePath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None)
-    try{Assert-Throws -Action {&$packager -Destination $destination -Force -Confirm:$false} -Pattern '.+' -Message 'Locked marketplace did not trigger rollback.'}finally{$lock.Dispose()}
+    try{Assert-Throw -Action {&$packager -Destination $destination -Force -Confirm:$false} -Pattern '.+' -Message 'Locked marketplace did not trigger rollback.'}finally{$lock.Dispose()}
     Assert-True -Condition ((Get-Snapshot -Root $destination)-ceq$beforeUpgrade) -Message 'Failed upgrade did not restore the exact destination snapshot.'
     Assert-True -Condition (@(Get-ChildItem -LiteralPath $destination -Filter '.pwb-tx-*' -Force).Count-eq 0) -Message 'Transaction residue remained after rollback.'
     $upgraded=&$packager -Destination $destination -Force -Confirm:$false
@@ -48,8 +48,8 @@ try{
     Assert-True -Condition (@(Get-ChildItem -LiteralPath $destination -Filter '.pwb-tx-*' -Force).Count-eq 0) -Message 'Transaction residue remained after success.'
     $invalidDestination=Join-Path $tempRoot 'invalid-parent';New-Item -ItemType Directory -Path (Join-Path $invalidDestination '.agents') -Force|Out-Null;Set-Content -LiteralPath (Join-Path $invalidDestination '.agents\plugins') -Value 'blocking-file' -Encoding UTF8
     $invalidBefore=Get-Snapshot -Root $invalidDestination
-    Assert-Throws -Action {&$packager -Destination $invalidDestination -Confirm:$false} -Pattern 'metadata parent is a file' -Message 'Invalid marketplace parent did not fail preflight.'
+    Assert-Throw -Action {&$packager -Destination $invalidDestination -Confirm:$false} -Pattern 'metadata parent is a file' -Message 'Invalid marketplace parent did not fail preflight.'
     Assert-True -Condition ((Get-Snapshot -Root $invalidDestination)-ceq$invalidBefore) -Message 'Failed preflight changed the destination.'
-    Assert-Throws -Action {&$packager -Destination $pluginRoot -WhatIf} -Pattern 'disjoint' -Message 'Overlapping source and destination were accepted.'
+    Assert-Throw -Action {&$packager -Destination $pluginRoot -WhatIf} -Pattern 'disjoint' -Message 'Overlapping source and destination were accepted.'
 }finally{if(Test-Path -LiteralPath $tempRoot){Remove-Item -LiteralPath $tempRoot -Recurse -Force}}
 'PowerShell Workbench portable marketplace contracts passed.'

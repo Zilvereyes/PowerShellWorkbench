@@ -8,7 +8,11 @@ description: Package PowerShell Workbench for another project, workstation, lapt
 Use this skill when the user wants to reuse, move, share, install, or update PowerShell Workbench on another project or computer.
 
 1. Keep project discovery portable. Use `../../scripts/Resolve-PowerShellWorkbenchContext.ps1`; never copy a source path from one workstation into required plugin behavior.
-2. For a folder, archive, or future Git repository, preview `../../scripts/New-PortablePowerShellWorkbenchMarketplace.ps1 -Destination <path> -WhatIf` first. Execution creates `.agents/plugins/marketplace.json` and `plugins/powershell-workbench` under one portable root. Existing targets require explicit `-Force`; the upgrade stages and validates both artifacts, backs up both existing targets, and restores them if replacement fails.
+2. For a folder, archive, or future Git repository, preview
+   `../../scripts/New-PortablePowerShellWorkbenchMarketplace.ps1 -Destination <path> -WhatIf` first. Execution creates
+   `.agents/plugins/marketplace.json` and `plugins/powershell-workbench` under one portable root. Existing targets require
+   explicit `-Force`; the upgrade stages and validates both artifacts, backs up both existing targets, and restores them
+   if replacement fails.
 3. Validate the packaged plugin before distribution.
 4. A second computer can add a local package with `codex plugin marketplace add <marketplace-root>`, or a Git-backed package with `codex plugin marketplace add owner/repository --ref <ref>`.
 5. GitHub access is required only to create, push, or update the remote repository. Local packaging and local installation require no GitHub credentials.
