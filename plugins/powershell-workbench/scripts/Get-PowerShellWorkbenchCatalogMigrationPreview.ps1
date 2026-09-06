@@ -4,6 +4,8 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedManifestSha256,
     [Parameter(Mandatory)][string]$DestinationCatalogPath,
     [Parameter(Mandatory)][string]$AllowedWriteRoot,
+    [Parameter(Mandatory)][datetimeoffset]$ReferenceTimeUtc,
+    [ValidateRange(1,8760)][int]$MaximumSourceAgeHours = 24,
     [ValidateSet('1.1')][string]$TargetSchemaVersion = '1.1',
     [switch]$NoThrow
 )
@@ -49,6 +51,23 @@ function Test-PathWithinRoot {
     $normalizedPath.StartsWith($normalizedRoot + $separator,[StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-PathChainWithoutReparsePoint {
+    param([string]$Path,[string]$Root)
+    $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    $current = [IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrWhiteSpace($current)) {
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -LiteralPath $current
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
+        }
+        if ($current -ieq $normalizedRoot) { return $true }
+        $parent = Split-Path -Parent $current
+        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -ieq $current) { break }
+        $current = $parent.TrimEnd('\','/')
+    }
+    $false
+}
+
 function Test-ManifestShape {
     param([object]$Manifest,[string]$SchemaVersion)
     $common = @('schemaVersion','generatedAtUtc','model','contextWindow','codexPath','codexVersion','codexSha256','baseModelSlug','bundledCatalogSha256','catalogPath','catalogSha256','unassertedCapabilities')
@@ -70,10 +89,42 @@ function Test-NonEmptyUniqueStringArray {
     $true
 }
 
+function Test-ExactStringArray {
+    param([object[]]$Actual,[string[]]$Expected)
+    if (@($Actual).Count -ne $Expected.Count) { return $false }
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        if ([string]$Actual[$index] -cne $Expected[$index]) { return $false }
+    }
+    $true
+}
+
+function Test-TransportSnapshotShape {
+    param([object]$Snapshot)
+    if ($null -eq $Snapshot -or $Snapshot -is [string] -or $Snapshot -is [Collections.IEnumerable]) { return $false }
+    $names = @($Snapshot.PSObject.Properties.Name)
+    $expected = @('use_responses_lite','tool_mode','multi_agent_version','supports_search_tool')
+    @($names | Where-Object { $expected -cnotcontains $_ }).Count -eq 0 -and
+        @($expected | Where-Object { $names -cnotcontains $_ }).Count -eq 0
+}
+
+function Test-EffectiveTransportInvariant {
+    param([object]$Snapshot)
+    if (-not (Test-TransportSnapshotShape -Snapshot $Snapshot)) { return $false }
+    $responsesLite = Get-PropertyValue -InputObject $Snapshot -Name 'use_responses_lite'
+    $toolMode = Get-PropertyValue -InputObject $Snapshot -Name 'tool_mode'
+    $multiAgentVersion = Get-PropertyValue -InputObject $Snapshot -Name 'multi_agent_version'
+    $supportsSearch = Get-PropertyValue -InputObject $Snapshot -Name 'supports_search_tool'
+    ($null -eq $responsesLite -or $responsesLite -ceq $false) -and
+        $null -eq $toolMode -and
+        $null -eq $multiAgentVersion -and
+        ($null -eq $supportsSearch -or $supportsSearch -ceq $false)
+}
+
 $manifestResolved = $null
 $destinationResolved = $null
 $destinationManifestPath = $null
 $allowedRootResolved = $null
+$allowedRootUsable = $false
 $manifestSha256 = $null
 $catalogPath = $null
 $catalogSha256 = $null
@@ -84,6 +135,11 @@ $model = $null
 $displayName = $null
 $contextWindow = [int64]0
 $manifest = $null
+$referenceTimeResolved = $ReferenceTimeUtc.ToUniversalTime()
+$generatorPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'New-PowerShellWorkbenchLocalModelCatalog.ps1'))
+$generatorSha256 = $null
+$sourceGeneratedAtUtc = $null
+$bundledCatalogSha256 = $null
 
 if (-not [IO.Path]::IsPathRooted($ManifestPath)) {
     Add-FailedGate -Gate 'SourceManifestPathAbsolute' -Subject $ManifestPath -Message 'ManifestPath must be absolute.'
@@ -99,7 +155,7 @@ if (-not [IO.Path]::IsPathRooted($AllowedWriteRoot)) {
         Add-FailedGate -Gate 'AllowedWriteRootExists' -Subject $allowedRootResolved -Message 'AllowedWriteRoot does not exist.'
     } elseif ((Get-Item -LiteralPath $allowedRootResolved).Attributes -band [IO.FileAttributes]::ReparsePoint) {
         Add-FailedGate -Gate 'AllowedWriteRootNotReparsePoint' -Subject $allowedRootResolved -Message 'AllowedWriteRoot cannot be a reparse point.'
-    }
+    } else { $allowedRootUsable = $true }
 }
 
 if (-not [IO.Path]::IsPathRooted($DestinationCatalogPath)) {
@@ -107,8 +163,12 @@ if (-not [IO.Path]::IsPathRooted($DestinationCatalogPath)) {
 } else {
     $destinationResolved = [IO.Path]::GetFullPath($DestinationCatalogPath)
     $destinationManifestPath = "$destinationResolved.manifest.json"
-    if ($allowedRootResolved -and -not (Test-PathWithinRoot -Path $destinationResolved -Root $allowedRootResolved)) {
+    if ($allowedRootUsable -and -not (Test-PathWithinRoot -Path $destinationResolved -Root $allowedRootResolved)) {
         Add-FailedGate -Gate 'DestinationPathAllowed' -Subject $destinationResolved -Message 'DestinationCatalogPath is outside AllowedWriteRoot.'
+    } elseif ($allowedRootUsable -and
+        (-not (Test-PathChainWithoutReparsePoint -Path $destinationResolved -Root $allowedRootResolved) -or
+        -not (Test-PathChainWithoutReparsePoint -Path $destinationManifestPath -Root $allowedRootResolved))) {
+        Add-FailedGate -Gate 'DestinationPathNotReparsePoint' -Subject $destinationResolved -Message 'Destination paths cannot traverse a reparse point.'
     }
 }
 
@@ -142,6 +202,12 @@ if ($manifest) {
     $generatedAtValid = [datetimeoffset]::TryParse($generatedAtText,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind,[ref]$generatedAt)
     if (-not $generatedAtValid -or $codexVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$' -or [string]::IsNullOrWhiteSpace($baseModelSlug) -or $bundledCatalogSha256 -notmatch '^[a-fA-F0-9]{64}$') {
         Add-FailedGate -Gate 'SourceGenerationIdentity' -Subject $manifestResolved -Message 'Source generation time, Codex version, base model, or bundled catalog identity is invalid.'
+    } else {
+        $sourceGeneratedAtUtc = $generatedAt.ToUniversalTime()
+        $sourceAge = $referenceTimeResolved - $sourceGeneratedAtUtc
+        if ($sourceGeneratedAtUtc -gt $referenceTimeResolved -or $sourceAge.TotalHours -gt $MaximumSourceAgeHours) {
+            Add-FailedGate -Gate 'SourceFreshness' -Subject $manifestResolved -Message 'Source manifest is stale or generated after ReferenceTimeUtc.'
+        }
     }
     $unasserted = @(Get-PropertyValue -InputObject $manifest -Name 'unassertedCapabilities')
     if (-not (Test-NonEmptyUniqueStringArray -Values $unasserted)) {
@@ -198,8 +264,12 @@ if ($manifest) {
     if ($sourceSchemaVersion -ceq '1.1') {
         $transport = Get-PropertyValue -InputObject $manifest -Name 'transport'
         $transportNames = if ($null -eq $transport) { @() } else { @($transport.PSObject.Properties.Name) }
+        $transportBase = if ($null -eq $transport) { $null } else { Get-PropertyValue -InputObject $transport -Name 'base' }
+        $transportEffective = if ($null -eq $transport) { $null } else { Get-PropertyValue -InputObject $transport -Name 'effective' }
         $transportOverrides = if ($null -eq $transport) { @() } else { @(Get-PropertyValue -InputObject $transport -Name 'overrides') }
-        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-NonEmptyUniqueStringArray -Values $transportOverrides)) {
+        $expectedOverrides = @('use_responses_lite=false when present','tool_mode removed when present','multi_agent_version removed when present','service_tier/service_tiers removed when present','supports_search_tool=false when present')
+        $expectedUnasserted = @('reasoning-levels','speed-tiers','service-tier','input-modalities','responses-lite','tool-mode','multi-agent-version','search-tool')
+        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-TransportSnapshotShape -Snapshot $transportBase) -or -not (Test-EffectiveTransportInvariant -Snapshot $transportEffective) -or -not (Test-ExactStringArray -Actual $transportOverrides -Expected $expectedOverrides) -or -not (Test-ExactStringArray -Actual $unasserted -Expected $expectedUnasserted)) {
             Add-FailedGate -Gate 'SourceTransportEvidence' -Subject $manifestResolved -Message 'Schema 1.1 transport evidence is incomplete.'
         }
     }
@@ -217,12 +287,23 @@ if ($destinationManifestPath -and $manifestResolved -and $destinationManifestPat
 
 $migrationRequired = $sourceSchemaVersion -ceq '1.0'
 $plan = $null
+if ($migrationRequired) {
+    if (-not (Test-Path -LiteralPath $generatorPath -PathType Leaf)) {
+        Add-FailedGate -Gate 'GeneratorExists' -Subject $generatorPath -Message 'Catalog generator is missing.'
+    } else { $generatorSha256 = (Get-FileHash -LiteralPath $generatorPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
 if ($failedGates.Count -eq 0 -and $migrationRequired) {
+    $generatorArguments = [ordered]@{
+        Model=$model;ContextWindow=$contextWindow;DisplayName=$displayName;CodexPath=$codexPath
+        ExpectedCodexSha256=$codexSha256;OutputPath=$destinationResolved
+    }
     $plan = [ordered]@{
         Operation='RegenerateCatalog';SourceSchemaVersion=$sourceSchemaVersion;TargetSchemaVersion=$TargetSchemaVersion
         SourceManifestPath=$manifestResolved;SourceManifestSha256=$manifestSha256;SourceCatalogPath=$catalogPath;SourceCatalogSha256=$catalogSha256
-        SourceCodexPath=$codexPath;SourceCodexSha256=$codexSha256;DestinationCatalogPath=$destinationResolved;DestinationManifestPath=$destinationManifestPath
-        Generator='New-PowerShellWorkbenchLocalModelCatalog.ps1';Model=$model;DisplayName=$displayName;ContextWindow=$contextWindow
+        SourceGeneratedAtUtc=$sourceGeneratedAtUtc.ToString('o');ReferenceTimeUtc=$referenceTimeResolved.ToString('o');MaximumSourceAgeHours=$MaximumSourceAgeHours
+        SourceCodexPath=$codexPath;SourceCodexSha256=$codexSha256;BundledCatalogSha256=$bundledCatalogSha256.ToLowerInvariant()
+        DestinationCatalogPath=$destinationResolved;DestinationManifestPath=$destinationManifestPath;AllowedWriteRoot=$allowedRootResolved
+        GeneratorPath=$generatorPath;GeneratorSha256=$generatorSha256;GeneratorArguments=$generatorArguments
         BackupRequired=$true;PostValidationRequired=$true;ExplicitApplyAuthorizationRequired=$true
     }
 }
@@ -232,6 +313,7 @@ $result = [pscustomobject][ordered]@{
     SchemaVersion='1.0';State=$state;Eligible=($state -ceq 'PREVIEW_READY');MigrationRequired=$migrationRequired
     SourceSchemaVersion=$sourceSchemaVersion;TargetSchemaVersion=$TargetSchemaVersion;ManifestPath=$manifestResolved;ManifestSha256=$manifestSha256
     DestinationCatalogPath=$destinationResolved;DestinationManifestPath=$destinationManifestPath;AllowedWriteRoot=$allowedRootResolved
+    ReferenceTimeUtc=$referenceTimeResolved.ToString('o');MaximumSourceAgeHours=$MaximumSourceAgeHours
     FailedGates=@($failedGates.ToArray());Diagnostics=@($diagnostics.ToArray());Plan=$plan;PlanSha256=$planSha256
     WritePerformed=$false;ExecutionPerformed=$false;TransportPerformed=$false
 }
