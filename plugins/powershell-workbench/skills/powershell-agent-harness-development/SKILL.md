@@ -26,6 +26,12 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
 - Use `../../scripts/Invoke-PowerShellWorkbenchCodexJson.ps1` to capture a bounded `codex exec --json` run. It requires PowerShell 7 because reliable argument passing, asynchronous waits, cancellation, and process-tree termination use modern .NET APIs. Supply `-CatalogManifestPath` when the run relies on a generated local model catalog.
 - Use `../../scripts/Test-PowerShellWorkbenchCodexEvidence.ps1` separately to validate the capture. A process exit code of zero and a plausible final message are insufficient when any tool, policy, approval, schema, or turn event failed.
 - Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` before relying on installed plugin or catalog evidence. Supply explicit distribution source/cache pairs and catalog manifests; require catalog evidence when a downstream run depends on it. Unknown versions, duplicate roots, tree drift, stale manifests, missing artifacts, and hash drift fail closed without changing the installation.
+- Use `../../scripts/Get-PowerShellWorkbenchCatalogMigrationPreview.ps1` to assess a schema 1.0 catalog before migration.
+  Supply the expected manifest hash, an explicit destination, a scoped allowed write root, and an authoritative reference
+  time. The previewer requires fully qualified paths and exact transport scalar types, and rejects stale, future, drifted,
+  unknown, unsafe-transport, and reparse-ambiguous evidence. It never
+  writes or launches Codex: verified schema 1.0 evidence returns a generator- and policy-hash-bound regeneration plan,
+  schema 1.1 returns `NO_CHANGE`, and failures preserve exact blocking gates. Applying the plan remains separately authorized.
 - `-AllowedAdvisoryRegex` is an opt-in, exact advisory mechanism for known host notices only. It can never allow tool, policy, approval, schema, or turn failures; keep each pattern as narrow as the observed advisory text.
 - Use `../../scripts/Resolve-PowerShellWorkbenchGateGroups.ps1` to evaluate named gate groups without collapsing safe runtime preparation into host certification. Consumers must select the exact group required for an action and preserve the returned failed-gate names.
 - Copy and adapt [assets/templates/provider-switch-transaction.ps1.tmpl](assets/templates/provider-switch-transaction.ps1.tmpl) for reversible provider configuration changes.
