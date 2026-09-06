@@ -49,6 +49,7 @@ Then start a new Codex task.
 - Package the plugin for another local marketplace, workstation, or Git-backed marketplace.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
 - Validate explicit Git/personal plugin source-cache pairs, expected versions, duplicate roots, and optional hash-bound catalog freshness without writing to the installation.
+- Preview a hash-bound local-model catalog schema migration without writing, launching Codex, or inventing schema 1.1 transport evidence from a legacy manifest.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
