@@ -53,6 +53,11 @@ try{
     $typedSha=(Get-FileHash -LiteralPath $typedPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $typed=& $validator -MetadataPath $typedPath -ExpectedMetadataSha256 $typedSha -ExpectedModelId fixture-model -ExpectedModelDigest $digest -AcceptUnverifiedModelDigest -AllowFixtureEvidence -NoThrow
     Assert-True (-not $typed.Passed -and $typed.FailedGates -contains 'Effects.toolExecutionPerformed') 'String False was coerced into a no-execution claim.'
+    $deepPath=Join-Path $tempRoot 'deep-response.json'
+    $deepJson='{"model":"fixture-model","done":true,"message":'+('['*70)+(']'*70)+'}'
+    [IO.File]::WriteAllText($deepPath,$deepJson,(New-Object Text.UTF8Encoding($false)))
+    $deepCapture=& $adapter -Prompt x -ModelId fixture-model -ModelDigest $digest -OutputDirectory (Join-Path $tempRoot 'deep-capture') -FixtureResponsePath $deepPath -Execute
+    Assert-True ($deepCapture.captureStatus -eq 'RequestFailed' -and $deepCapture.failure -match 'JSON nesting limit') 'Deep JSON fixture was not rejected before parsing.'
     Add-Content -LiteralPath $capture.artifacts.responsePath -Value 'drift'
     $drift=& $validator -MetadataPath $capture.MetadataPath -ExpectedMetadataSha256 $metadataSha -ExpectedModelId fixture-model -ExpectedModelDigest $digest -AcceptUnverifiedModelDigest -AllowFixtureEvidence -NoThrow
     Assert-True (-not $drift.Passed -and $drift.FailedGates -contains 'Artifacts.response.Sha256') 'Response drift was not rejected by exact hash gate.'

@@ -46,12 +46,25 @@ function Test-Allowlist {
     if($null -eq $Object){Add-Failure $Gate;return}
     foreach($property in $Object.PSObject.Properties){if($Allowed -notcontains $property.Name){Add-Failure $Gate;return}}
 }
+function Test-JsonNesting {
+    param([string]$Text,[ValidateRange(1,256)][int]$MaximumDepth = 64)
+    $depth=0;$quoted=$false;$escaped=$false
+    foreach($character in $Text.ToCharArray()){
+        if($escaped){$escaped=$false;continue}
+        if($quoted -and $character -eq '\'){$escaped=$true;continue}
+        if($character -eq '"'){$quoted=-not $quoted;continue}
+        if(-not $quoted -and $character -in @('{','[')){$depth++;if($depth -gt $MaximumDepth){return $false}}
+        elseif(-not $quoted -and $character -in @('}',']')){$depth--;if($depth -lt 0){return $false}}
+    }
+    $depth -eq 0 -and -not $quoted -and -not $escaped
+}
 $requestPath = $null
 $responsePath = $null
 
 $metadataSnapshot = Read-BoundedSnapshot -LiteralPath $MetadataPath -MaximumBytes $MaxMetadataBytes
 $resolvedMetadata = $metadataSnapshot.Path
 if ($metadataSnapshot.Sha256 -ne $ExpectedMetadataSha256.ToLowerInvariant()) { Add-Failure 'MetadataSha256' }
+if (-not(Test-JsonNesting -Text $metadataSnapshot.Text)) { throw 'Metadata exceeds the JSON nesting limit or is structurally incomplete.' }
 try { $metadata = $metadataSnapshot.Text | ConvertFrom-Json }
 catch { throw "Metadata is invalid JSON: $($_.Exception.Message)" }
 if ([string](Get-Value $metadata 'schemaVersion') -cne '1.0') { Add-Failure 'SchemaVersion' }
@@ -121,8 +134,8 @@ foreach ($name in @('request','response')) {
     if ($name -eq 'request') { $requestPath = $path } else { $responsePath = $path }
 }
 if ($requestPath) {
-    try { $request = $artifactSnapshots['request'].Text | ConvertFrom-Json }
-    catch { Add-Failure 'Request.Json'; $request = $null }
+    if (-not(Test-JsonNesting -Text $artifactSnapshots['request'].Text)) { Add-Failure 'Request.JsonNesting'; $request = $null }
+    else { try { $request = $artifactSnapshots['request'].Text | ConvertFrom-Json } catch { Add-Failure 'Request.Json'; $request = $null } }
     if ($request) {
         Test-Allowlist $request @('model','messages','stream','think','keep_alive','options') 'Request.Properties'
         if ([string](Get-Value $request 'model') -cne $ExpectedModelId) { Add-Failure 'Request.ModelId' }
@@ -140,8 +153,8 @@ if ($requestPath) {
     }
 }
 if ($responsePath) {
-    try { $response = $artifactSnapshots['response'].Text | ConvertFrom-Json }
-    catch { Add-Failure 'Response.Json'; $response = $null }
+    if (-not(Test-JsonNesting -Text $artifactSnapshots['response'].Text)) { Add-Failure 'Response.JsonNesting'; $response = $null }
+    else { try { $response = $artifactSnapshots['response'].Text | ConvertFrom-Json } catch { Add-Failure 'Response.Json'; $response = $null } }
     if ($response) {
         if ([string](Get-Value $response 'model') -cne $ExpectedModelId) { Add-Failure 'Response.ModelId' }
         if (-not(Test-ExactBoolean (Get-Value $response 'done') $true)) { Add-Failure 'Response.Done' }

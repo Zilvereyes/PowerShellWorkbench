@@ -20,6 +20,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
+$strictUtf8 = New-Object Text.UTF8Encoding($false, $true)
 
 function Get-ByteSha256 {
     param([Parameter(Mandatory)][byte[]]$Bytes)
@@ -59,6 +60,19 @@ function Get-PropertyValue {
     $property = $InputObject.PSObject.Properties[$Name]
     if ($null -eq $property) { return $Default }
     $property.Value
+}
+
+function Test-JsonNesting {
+    param([Parameter(Mandatory)][string]$Text,[ValidateRange(1,256)][int]$MaximumDepth = 64)
+    $depth=0;$quoted=$false;$escaped=$false
+    foreach($character in $Text.ToCharArray()){
+        if($escaped){$escaped=$false;continue}
+        if($quoted -and $character -eq '\'){$escaped=$true;continue}
+        if($character -eq '"'){$quoted=-not $quoted;continue}
+        if(-not $quoted -and $character -in @('{','[')){$depth++;if($depth -gt $MaximumDepth){return $false}}
+        elseif(-not $quoted -and $character -in @('}',']')){$depth--;if($depth -lt 0){return $false}}
+    }
+    $depth -eq 0 -and -not $quoted -and -not $escaped
 }
 
 $endpointAddress = $null
@@ -176,7 +190,9 @@ try {
         }
     }
     if ($responseBytes.Length -eq 0) { throw 'Ollama returned an empty response.' }
-    $responseText = $utf8.GetString($responseBytes)
+    try { $responseText = $strictUtf8.GetString($responseBytes) }
+    catch { throw 'Ollama response is not valid UTF-8.' }
+    if (-not(Test-JsonNesting -Text $responseText)) { throw 'Ollama response exceeds the JSON nesting limit or is structurally incomplete.' }
     try { $responseObject = $responseText | ConvertFrom-Json }
     catch { throw "Ollama returned invalid JSON: $($_.Exception.Message)" }
     $observedModel = [string](Get-PropertyValue -InputObject $responseObject -Name 'model')
