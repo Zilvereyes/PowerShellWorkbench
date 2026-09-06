@@ -53,6 +53,7 @@ Then start a new Codex task.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 - Prepare or explicitly invoke one byte- and time-bounded loopback Ollama `/api/chat` request, preserve hash-bound raw request/response evidence, and record tool calls without executing them.
+- Compare two or more frozen Ollama evidence captures against one hash-bound task, keep quality separate from performance, and rank only valid passing candidates without retries, model calls, writes, or transport.
 - Turn one validated `read_file_slice` tool call into a deterministic proposal, require a separate hash-bound approval, execute only a bounded read, and resolve missing evidence as `UNKNOWN` or contradictory evidence as `CONFLICT`.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
 - Recognize an interruption after a hash-verified provider profile write, bind resume evidence to loopback endpoint, wire API, local-model catalog and canonical owned state, and return `ManagedCommitRequired` with `DesktopLifecycleInvoked=False` instead of switching the provider again.
@@ -100,6 +101,8 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 `Invoke-PowerShellWorkbenchReadOnlyTool.ps1` previews unless `-Execute` is explicit. Proposal, approval, target and observation
 are independently hash-bound, output writes require a separate scoped evidence root, and no stage performs transport.
 The wire schema follows Ollama's official [tool-calling contract](https://docs.ollama.com/capabilities/tool-calling).
+
+`Compare-PowerShellWorkbenchOllamaEvidence.ps1` reads a hash-bound comparison manifest under an explicit evidence root. It verifies each capture, requires an identical prompt and normalized request configuration, evaluates an exact UTF-8 answer hash, and reports wall time, server duration, and token counts separately. Wrong answers are never ranked merely because they are fast; missing metrics are `UNKNOWN`, while hash, path, prompt, or configuration drift is `CONFLICT`. The comparator performs no retry, model call, write, or transport.
 
 ```powershell
 $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `
