@@ -13,3 +13,4 @@ Use this skill for missing-command, PATH, workstation bootstrap, plugin-installa
 4. Keep installation optional and explicit. Diagnose first; install, change persistent PATH, authenticate, or add a marketplace only when requested.
 5. After an approved install, verify with `Get-Command`, the tool's version command, and a newly opened shell when persistent environment variables changed.
 6. For another laptop, separate three prerequisites: Codex CLI availability, Git/network access to the marketplace, and plugin installation. Do not assume Codex Desktop exposes `codex` globally.
+7. Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` with explicit source/cache distribution pairs and an expected version to diagnose installation identity. Add catalog manifests only when their freshness and hashes are in scope. The validator is read-only, preserves exact failed-gate names, and never discovers or rewrites marketplace paths implicitly.
