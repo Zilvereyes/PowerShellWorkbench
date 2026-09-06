@@ -6,6 +6,9 @@ param(
     [string]$ReportDirectory = (Join-Path (Get-Location).Path 'Reports\NativeCommands'),
     [string]$StepId = 'native-command',
     [scriptblock]$Verify,
+    [ValidateSet('ProcessLaunch','ArtifactIntegrity','InstalledState','Custom')][string]$VerificationScope,
+    [int[]]$SuccessExitCodes = @(0),
+    [switch]$RequireVerification,
     [ValidateSet('None','Possible','Expected','Unknown')][string]$MutationIntent = 'Unknown',
     [ValidateSet('Mount','Commit','BootMedia','RegistryHive','DiskWrite','ACL')][string[]]$RiskSurface = @(),
     [switch]$Rollback,
@@ -39,6 +42,10 @@ function Write-OperatorBlock {
 
 $resolvedFile=(Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).Path
 $resolvedWorkingDirectory=(Resolve-Path -LiteralPath $WorkingDirectory -ErrorAction Stop).Path
+if($SuccessExitCodes.Count -eq 0){throw 'SuccessExitCodes cannot be empty.'}
+if($RequireVerification -and -not $Verify){throw 'RequireVerification requires a Verify script block.'}
+if($PSBoundParameters.ContainsKey('VerificationScope') -and -not $Verify){throw 'VerificationScope requires a Verify script block.'}
+$effectiveVerificationScope=if($Verify){if($PSBoundParameters.ContainsKey('VerificationScope')){$VerificationScope}else{'Custom'}}else{'None'}
 $runId='{0}-{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')),[guid]::NewGuid().ToString('N')
 if(-not(Test-Path -LiteralPath $ReportDirectory -PathType Container)){New-Item -ItemType Directory -Path $ReportDirectory -Force|Out-Null}
 $reportPath=Join-Path $ReportDirectory "$runId.json";$timelinePath=Join-Path $ReportDirectory "$runId.timeline.txt"
@@ -46,25 +53,35 @@ $startedAt=[DateTime]::UtcNow;$timeline=New-Object System.Collections.Generic.Li
 $safeArguments=@($ArgumentList|ForEach-Object {Protect-OperatorText ([string]$_)})
 $timeline.Add("STARTER $($startedAt.ToString('o')) $StepId")
 Write-OperatorBlock -State 'STARTER' -Message "[$StepId] $resolvedFile $($safeArguments -join ' ')"
-$exitCode=$null;$executionError=$null;$verified=$false;$processStarted=$false;$contractMutationIntent=if($AnalyzeOnly){'None'} else { $MutationIntent }
+$exitCode=$null;$executionError=$null;$verificationError=$null;$verificationState='NotRun';$processStarted=$false;$succeeded=$false;$contractMutationIntent=if($AnalyzeOnly){'None'} else { $MutationIntent }
 if($AnalyzeOnly){$timeline.Add('ANALYZE_ONLY process was not started.');Write-OperatorBlock -State 'FAERDIG' -Message "[$StepId] analyse udfoert; processen blev ikke startet."}else{
     try{
         Push-Location -LiteralPath $resolvedWorkingDirectory
         try{
             $processStarted = $true
-            & $resolvedFile @ArgumentList 2>&1|ForEach-Object {$line=Protect-OperatorText ([string]$_);$timeline.Add("OUTPUT $line");Write-OperatorLine -Message $line -Color 'Gray'}
-            $exitCode=$LASTEXITCODE
+            $previousErrorActionPreference=$ErrorActionPreference
+            try{
+                $ErrorActionPreference='Continue'
+                & $resolvedFile @ArgumentList 2>&1|ForEach-Object {$line=Protect-OperatorText ([string]$_);$timeline.Add("OUTPUT $line");Write-OperatorLine -Message $line -Color 'Gray'}
+                $exitCode=$LASTEXITCODE
+            }finally{$ErrorActionPreference=$previousErrorActionPreference}
         }finally{Pop-Location}
-        if($exitCode -eq 0){Write-OperatorBlock -State 'FAERDIG' -Message "[$StepId] afsluttet med exit code 0.";$timeline.Add('FAERDIG exit code 0.')}else{Write-OperatorBlock -State 'FEJL' -Message "[$StepId] afsluttet med exit code $exitCode.";$timeline.Add("FEJL exit code $exitCode.")}
+        $succeeded=$SuccessExitCodes -contains $exitCode
+        if($succeeded){Write-OperatorBlock -State 'FAERDIG' -Message "[$StepId] afsluttet med accepteret exit code $exitCode.";$timeline.Add("FAERDIG accepted exit code $exitCode.")}else{Write-OperatorBlock -State 'FEJL' -Message "[$StepId] afsluttet med ikke-accepteret exit code $exitCode.";$timeline.Add("FEJL unaccepted exit code $exitCode.")}
     }catch{$executionError=$_.Exception.Message;Write-OperatorBlock -State 'FEJL' -Message "[$StepId] kunne ikke koeres: $executionError";$timeline.Add("FEJL $executionError")}
 }
 $observedTargetMutation=if($AnalyzeOnly){$false}else{$null}
-$baseResult=[pscustomobject]@{StepId=$StepId;ExitCode=$exitCode;ExecutionError=$executionError;AnalyzeOnly=[bool]$AnalyzeOnly;ProcessStarted=$processStarted;ExecutionOccurred=$processStarted;TargetMutation=$observedTargetMutation;MutationIntent=$contractMutationIntent;RiskSurfaces=@($RiskSurface)}
-if(-not $AnalyzeOnly -and -not $executionError -and $exitCode -eq 0){$verified=$true;if($Verify){try{$verified=[bool](& $Verify $baseResult)}catch{$verified=$false;$executionError=$_.Exception.Message}}}
-if($verified){Write-OperatorBlock -State 'VERIFICERET' -Message "[$StepId] post-check bestod.";$timeline.Add('VERIFICERET post-check bestod.')}elseif($Rollback){Write-OperatorBlock -State 'ROLLBACK' -Message "[$StepId] rollback er paakraevet; udfoer kun en eksplicit godkendt rollback-kommando.";$timeline.Add('ROLLBACK requested; no rollback command was executed.')}elseif(-not $AnalyzeOnly){Write-OperatorBlock -State 'FEJL' -Message "[$StepId] blev ikke verificeret.";$timeline.Add('FEJL post-check failed or was not supplied.')}
+$baseResult=[pscustomobject]@{StepId=$StepId;ExitCode=$exitCode;Succeeded=$succeeded;ExecutionError=$executionError;AnalyzeOnly=[bool]$AnalyzeOnly;ProcessStarted=$processStarted;ExecutionOccurred=$processStarted;TargetMutation=$observedTargetMutation;MutationIntent=$contractMutationIntent;RiskSurfaces=@($RiskSurface)}
+if(-not $AnalyzeOnly -and $succeeded -and $Verify){
+    try{if([bool](& $Verify $baseResult)){$verificationState='Passed'}else{$verificationState='Failed'}}catch{$verificationState='Failed';$verificationError=$_.Exception.Message}
+}
+$verified=$verificationState -eq 'Passed'
+if($verified){Write-OperatorBlock -State 'VERIFICERET' -Message "[$StepId] post-check bestod ($effectiveVerificationScope).";$timeline.Add("VERIFICERET post-check bestod ($effectiveVerificationScope).")}elseif($verificationState -eq 'Failed'){Write-OperatorBlock -State 'FEJL' -Message "[$StepId] post-check fejlede ($effectiveVerificationScope).";$timeline.Add("FEJL post-check failed ($effectiveVerificationScope).")}elseif(-not $AnalyzeOnly){$timeline.Add('VERIFICATION_NOT_RUN no post-check was executed.')}
+$contractFailed=(-not $AnalyzeOnly) -and ((-not $succeeded) -or $verificationState -eq 'Failed' -or ($RequireVerification -and -not $verified))
+if($contractFailed -and $Rollback){Write-OperatorBlock -State 'ROLLBACK' -Message "[$StepId] rollback er paakraevet; udfoer kun en eksplicit godkendt rollback-kommando.";$timeline.Add('ROLLBACK requested; no rollback command was executed.')}
 $finishedAt=[DateTime]::UtcNow
 $result=[pscustomobject]@{
-    SchemaVersion='1.0'
+    SchemaVersion='2.0'
     RunId=$runId
     StepId=$StepId
     StartedAtUtc=$startedAt.ToString('o')
@@ -73,7 +90,13 @@ $result=[pscustomobject]@{
     Arguments=$safeArguments
     WorkingDirectory=$resolvedWorkingDirectory
     ExitCode=$exitCode
+    SuccessExitCodes=@($SuccessExitCodes)
+    Succeeded=$succeeded
     ExecutionError=$executionError
+    VerificationState=$verificationState
+    VerificationScope=$effectiveVerificationScope
+    VerificationError=$verificationError
+    VerificationRequired=[bool]$RequireVerification
     Verified=$verified
     AnalyzeOnly=[bool]$AnalyzeOnly
     ProcessStarted=$processStarted
@@ -87,5 +110,5 @@ $result=[pscustomobject]@{
 }
 $timeline|Set-Content -LiteralPath $timelinePath -Encoding UTF8
 $result|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $reportPath -Encoding UTF8
-if(((-not $AnalyzeOnly) -and ($executionError -or $exitCode -ne 0 -or -not $verified)) -and -not $NoThrow){throw "Native command '$StepId' failed or was not verified. See $reportPath"}
+if($contractFailed -and -not $NoThrow){throw "Native command '$StepId' failed its execution or verification contract. See $reportPath"}
 $result
