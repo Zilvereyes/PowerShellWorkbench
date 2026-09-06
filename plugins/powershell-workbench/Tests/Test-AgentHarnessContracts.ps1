@@ -267,7 +267,9 @@ try {
     try {
         $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
             -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @invalidManagedEvidence
-    } catch {}
+    } catch {
+        throw "Invalid managed-state path escaped the structured fail-closed decision with an exception: $($_.Exception.Message)"
+    }
     Assert-True ($null -ne $resume -and -not $resume.eligible -and $resume.failedGates -contains 'ExpectedManagedStatePathValid') 'Invalid managed-state path escaped the structured fail-closed decision.'
 
     $invalidSequencePath=Join-Path $backupDirectory 'invalid-sequence.transaction.json'
