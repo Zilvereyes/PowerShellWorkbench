@@ -104,6 +104,14 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 are independently hash-bound, output writes require a separate scoped evidence root, and no stage performs transport.
 The wire schema follows Ollama's official [tool-calling contract](https://docs.ollama.com/capabilities/tool-calling).
 
+## Authoritative documentation catalogs
+
+The `powershell-docs`, `microsoft-dism-docs`, `microsoft-update-docs`, and `ollama-docs` skills route research through
+one hash-bound `assets/documentation-source-catalog.json`. The dual-compatible catalog validator rejects stale,
+drifted, malformed, unknown-domain, unsafe-URL, and authority-host evidence without browsing, writing, executing, or
+transporting anything. Catalog membership is only a discovery boundary: current technical claims still require opening
+and citing the exact official page with the relevant product or runtime version.
+
 `Compare-PowerShellWorkbenchOllamaEvidence.ps1` reads a hash-bound comparison manifest under an explicit evidence root.
 It verifies each capture, requires an identical prompt and normalized request configuration, evaluates an exact UTF-8
 answer hash, and reports wall time, server duration, and token counts separately. Wrong answers are never ranked merely

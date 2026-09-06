@@ -24,7 +24,7 @@ try{
     &$pluginValidator -PluginRoot $installed.PluginPath|Out-Null
     $marketplace=Get-Content -LiteralPath $installed.MarketplacePath -Raw|ConvertFrom-Json
     Assert-True -Condition ([string]$marketplace.plugins[0].source.path-ceq'./plugins/powershell-workbench') -Message 'Marketplace source path is not portable.'
-    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion '0.7.10' -NoThrow
+    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion '0.7.11' -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Clean install tree identity failed: $($health.FailedGates-join', ')."
     $beforeExisting=Get-Snapshot -Root $destination
     Assert-Throw -Action {&$packager -Destination $destination -Confirm:$false} -Pattern 'use -Force' -Message 'Existing targets did not require -Force.'
@@ -43,7 +43,7 @@ try{
     $upgraded=&$packager -Destination $destination -Force -Confirm:$false
     Assert-True -Condition ($upgraded.State-eq'SUCCEEDED'-and$upgraded.Mode-eq'Upgrade'-and-not$upgraded.RestorePerformed) -Message 'Upgrade result contract failed.'
     Assert-True -Condition (-not(Test-Path -LiteralPath (Join-Path $upgraded.PluginPath 'legacy-marker.txt'))) -Message 'Upgrade retained an obsolete plugin file.'
-    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$upgraded.PluginPath}) -ExpectedVersion '0.7.10' -NoThrow
+    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$upgraded.PluginPath}) -ExpectedVersion '0.7.11' -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Upgrade tree identity failed: $($health.FailedGates-join', ')."
     Assert-True -Condition (@(Get-ChildItem -LiteralPath $destination -Filter '.pwb-tx-*' -Force).Count-eq 0) -Message 'Transaction residue remained after success.'
     $invalidDestination=Join-Path $tempRoot 'invalid-parent';New-Item -ItemType Directory -Path (Join-Path $invalidDestination '.agents') -Force|Out-Null;Set-Content -LiteralPath (Join-Path $invalidDestination '.agents\plugins') -Value 'blocking-file' -Encoding UTF8
