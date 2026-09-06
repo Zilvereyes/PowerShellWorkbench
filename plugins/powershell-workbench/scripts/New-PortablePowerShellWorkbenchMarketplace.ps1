@@ -30,7 +30,7 @@ $marketplace=[ordered]@{name='powershell-workbench';interface=[ordered]@{display
 $null=New-Item -ItemType Directory -Path $destinationRoot -Force
 $transactionRoot=Join-Path $destinationRoot ('.pwb-tx-'+[guid]::NewGuid().ToString('N').Substring(0,8))
 $stagedPlugin=Join-Path $transactionRoot 'p';$stagedMarketplace=Join-Path $transactionRoot 'm.json';$backupPlugin=Join-Path $transactionRoot 'bp';$backupMarketplace=Join-Path $transactionRoot 'bm.json'
-$newPluginPlaced=$false;$newMarketplacePlaced=$false;$restorePerformed=$false
+$newPluginPlaced=$false;$newMarketplacePlaced=$false;$restorePerformed=$false;$preserveTransaction=$false
 try{
     $null=New-Item -ItemType Directory -Path $transactionRoot
     Copy-Item -LiteralPath $pluginRoot -Destination $stagedPlugin -Recurse
@@ -53,8 +53,8 @@ try{
         if(Test-Path -LiteralPath $backupMarketplace -PathType Leaf){Move-Item -LiteralPath $backupMarketplace -Destination $marketplacePath;$restorePerformed=$true}
         if($newPluginPlaced-and(Test-Path -LiteralPath $pluginDestination -PathType Container)){Remove-Item -LiteralPath $pluginDestination -Recurse -Force}
         if(Test-Path -LiteralPath $backupPlugin -PathType Container){Move-Item -LiteralPath $backupPlugin -Destination $pluginDestination;$restorePerformed=$true}
-    }catch{throw "Portable marketplace transaction failed and rollback also failed: $($primaryError.Exception.Message) Rollback: $($_.Exception.Message)"}
+    }catch{$preserveTransaction=$true;throw "Portable marketplace transaction failed and rollback also failed; retained recovery artifacts: $transactionRoot. Primary: $($primaryError.Exception.Message) Rollback: $($_.Exception.Message)"}
     throw $primaryError
-}finally{if(Test-Path -LiteralPath $transactionRoot -PathType Container){Remove-Item -LiteralPath $transactionRoot -Recurse -Force}}
+}finally{if(-not$preserveTransaction-and(Test-Path -LiteralPath $transactionRoot -PathType Container)){Remove-Item -LiteralPath $transactionRoot -Recurse -Force}}
 
 [pscustomobject][ordered]@{SchemaVersion='1.0';State='SUCCEEDED';Mode=$mode;MarketplaceRoot=$destinationRoot;PluginPath=$pluginDestination;MarketplacePath=$marketplacePath;ExistingPlugin=$pluginExists;ExistingMarketplace=$marketplaceExists;WritePerformed=$true;RestorePerformed=$restorePerformed;TransportPerformed=$false}
