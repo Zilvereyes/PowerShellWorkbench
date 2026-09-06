@@ -2,6 +2,10 @@
 
 PowerShell Workbench is a portable Codex plugin for PowerShell-centered and mixed-language projects. It supports Windows PowerShell 5.1 and PowerShell 7, with reusable scaffolding, refactoring guidance, project discovery, optional quality gates, and focused workflows for RecoveryToolkit and WingetDownloader.
 
+PowerShell Workbench is released under the [MIT License](LICENSE). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation expectations, and report
+suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 ## Windows prerequisite
 
 `codex` must be available as a terminal command. Codex Desktop may contain an application-private binary without exposing it on `PATH`. Follow the [current official instructions](https://developers.openai.com/codex/cli). Avoid piping downloaded scripts directly into `Invoke-Expression`; authenticate installation artifacts before execution.
