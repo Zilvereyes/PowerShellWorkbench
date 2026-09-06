@@ -103,6 +103,14 @@ try{
     $expired=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $expiredApprovalPath -ApprovalSha256 $expiredApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($expired.State -eq 'UNKNOWN') 'Expired approval was not UNKNOWN.';Assert-GatesExactly -Result $expired -Expected @('ApprovalFreshness') -Message 'Expired approval gate changed.'
 
+    $futureApprovalPath=Join-Path $tempRoot 'future-approval.json';$futureApprovalSha=New-Approval -LiteralPath $futureApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T12:10:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
+    $futureApproval=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $futureApprovalPath -ApprovalSha256 $futureApprovalSha -AllowedRoot $allowedRoot
+    Assert-True ($futureApproval.State -eq 'UNKNOWN') 'Future approval was not UNKNOWN.';Assert-GatesExactly -Result $futureApproval -Expected @('ApprovalFreshness') -Message 'Future approval gate changed.'
+
+    $preProposalApprovalPath=Join-Path $tempRoot 'pre-proposal-approval.json';$preProposalApprovalSha=New-Approval -LiteralPath $preProposalApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T11:59:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
+    $preProposalApproval=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $preProposalApprovalPath -ApprovalSha256 $preProposalApprovalSha -AllowedRoot $allowedRoot
+    Assert-True ($preProposalApproval.State -eq 'UNKNOWN') 'Approval before proposal was not UNKNOWN.';Assert-GatesExactly -Result $preProposalApproval -Expected @('ApprovalFreshness') -Message 'Pre-proposal approval gate changed.'
+
     $outsidePath=Join-Path $tempRoot 'outside.txt';[IO.File]::WriteAllText($outsidePath,'outside',$utf8)
     $outsideProposalPath=Join-Path $tempRoot 'outside-proposal.json';$outsideProposalSha=New-Proposal -LiteralPath $outsideProposalPath -TargetPath $outsidePath
     $outsideApprovalPath=Join-Path $tempRoot 'outside-approval.json';$outsideApprovalSha=New-Approval -LiteralPath $outsideApprovalPath -ProposalSha256 $outsideProposalSha -AllowedRoot $allowedRoot -TargetPath $outsidePath

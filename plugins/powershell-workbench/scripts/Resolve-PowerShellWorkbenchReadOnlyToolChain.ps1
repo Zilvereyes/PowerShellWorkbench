@@ -90,6 +90,7 @@ if($approvalEvidence){
     if(-not $approvalRoot){Add-UnknownGate 'ApprovalRoot'}elseif($rootResolved -and $approvalRoot -ine $rootResolved){Add-ConflictGate 'ApprovalRootBinding'}
     try{$approvalCreated=Convert-EvidenceTime -Value (Get-Value $approval 'createdAt');$approvalExpires=Convert-EvidenceTime -Value (Get-Value $approval 'expiresAt')}catch{Add-UnknownGate 'ApprovalTime'}
     if($approvalCreated -and $approvalExpires -and $approvalExpires -le $approvalCreated){Add-UnknownGate 'ApprovalWindow'}
+    if($approvalCreated -and (($proposalCreated -and $approvalCreated -lt $proposalCreated) -or $approvalCreated -gt $ReferenceTimeUtc.ToUniversalTime())){Add-UnknownGate 'ApprovalFreshness'}
     $approvedTarget=Get-Value $approval 'target';if(-not(Test-Shape $approvedTarget @('path','sha256','bytes'))){Add-UnknownGate 'ApprovalTargetShape'}else{$approvedTargetPath=Get-NormalizedPath -Path ([string](Get-Value $approvedTarget 'path'));$normalizedTargetPath=Get-NormalizedPath -Path $targetPath;if(-not $approvedTargetPath){Add-UnknownGate 'ApprovalTargetPath'}elseif($normalizedTargetPath -and $approvedTargetPath -ine $normalizedTargetPath){Add-ConflictGate 'ApprovalTargetBinding'};$targetSha256=[string](Get-Value $approvedTarget 'sha256');if($targetSha256 -notmatch '^[a-fA-F0-9]{64}$' -or -not(Test-Integer (Get-Value $approvedTarget 'bytes')) -or [int64](Get-Value $approvedTarget 'bytes') -lt 0){Add-UnknownGate 'ApprovalTargetEvidence'}}
 }
 
