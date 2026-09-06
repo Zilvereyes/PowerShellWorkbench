@@ -114,7 +114,7 @@ function Test-TransportSnapshotShape {
         @($expected | Where-Object { $names -cnotcontains $_ }).Count -eq 0
 }
 
-function Test-TransportSnapshotValueTypes {
+function Test-TransportSnapshotValueType {
     param([object]$Snapshot)
     if (-not (Test-TransportSnapshotShape -Snapshot $Snapshot)) { return $false }
     $responsesLite = Get-PropertyValue -InputObject $Snapshot -Name 'use_responses_lite'
@@ -129,7 +129,7 @@ function Test-TransportSnapshotValueTypes {
 
 function Test-EffectiveTransportInvariant {
     param([object]$Snapshot)
-    if (-not (Test-TransportSnapshotValueTypes -Snapshot $Snapshot)) { return $false }
+    if (-not (Test-TransportSnapshotValueType -Snapshot $Snapshot)) { return $false }
     $responsesLite = Get-PropertyValue -InputObject $Snapshot -Name 'use_responses_lite'
     $toolMode = Get-PropertyValue -InputObject $Snapshot -Name 'tool_mode'
     $multiAgentVersion = Get-PropertyValue -InputObject $Snapshot -Name 'multi_agent_version'
@@ -289,7 +289,7 @@ if ($manifest) {
         $transportOverrides = if ($null -eq $transport) { @() } else { @(Get-PropertyValue -InputObject $transport -Name 'overrides') }
         $expectedOverrides = @('use_responses_lite=false when present','tool_mode removed when present','multi_agent_version removed when present','service_tier/service_tiers removed when present','supports_search_tool=false when present')
         $expectedUnasserted = @('reasoning-levels','speed-tiers','service-tier','input-modalities','responses-lite','tool-mode','multi-agent-version','search-tool')
-        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-TransportSnapshotValueTypes -Snapshot $transportBase) -or -not (Test-EffectiveTransportInvariant -Snapshot $transportEffective) -or -not (Test-ExactStringArray -Actual $transportOverrides -Expected $expectedOverrides) -or -not (Test-ExactStringArray -Actual $unasserted -Expected $expectedUnasserted)) {
+        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-TransportSnapshotValueType -Snapshot $transportBase) -or -not (Test-EffectiveTransportInvariant -Snapshot $transportEffective) -or -not (Test-ExactStringArray -Actual $transportOverrides -Expected $expectedOverrides) -or -not (Test-ExactStringArray -Actual $unasserted -Expected $expectedUnasserted)) {
             Add-FailedGate -Gate 'SourceTransportEvidence' -Subject $manifestResolved -Message 'Schema 1.1 transport evidence is incomplete.'
         }
     }
