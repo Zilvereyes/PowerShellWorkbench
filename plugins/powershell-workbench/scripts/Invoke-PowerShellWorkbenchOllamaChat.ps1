@@ -10,10 +10,12 @@ param(
     [ValidateRange(1024, 10485760)][int]$MaxRequestBytes = 1048576,
     [ValidateRange(1024, 1073741824)][long]$MaxResponseBytes = 16777216,
     [ValidateRange(1, 1048576)][int]$MaxOutputTokens = 4096,
+    [ValidateRange(1, 1048576)][int]$ReadFileSliceMaximumBytes = 65536,
     [ValidateRange(0.0, 2.0)][double]$Temperature = 0.0,
     [Nullable[int]]$Seed,
     [ValidatePattern('^(0|[1-9][0-9]*[smh])$')][string]$KeepAlive = '0',
     [string]$FixtureResponsePath,
+    [switch]$EnableReadFileSliceProposal,
     [switch]$Execute
 )
 
@@ -98,6 +100,9 @@ $request = [ordered]@{
     keep_alive = $KeepAlive
     options = $options
 }
+if($EnableReadFileSliceProposal){
+    $request.tools=@([ordered]@{type='function';function=[ordered]@{name='read_file_slice';description='Propose a bounded byte slice from one file. The client does not execute the proposal automatically.';parameters=[ordered]@{type='object';required=@('path','offsetBytes','maximumBytes');properties=[ordered]@{path=[ordered]@{type='string';description='Fully qualified file path inside the separately approved root.'};offsetBytes=[ordered]@{type='integer';minimum=0};maximumBytes=[ordered]@{type='integer';minimum=1;maximum=$ReadFileSliceMaximumBytes}}}}})
+}
 $requestJson = $request | ConvertTo-Json -Depth 10 -Compress
 $requestBytes = $utf8.GetBytes($requestJson)
 if ($requestBytes.Length -gt $MaxRequestBytes) { throw 'Serialized request exceeds MaxRequestBytes.' }
@@ -115,6 +120,7 @@ $plan = [pscustomobject][ordered]@{
     toolExecutionPerformed = $false
     desktopLifecyclePerformed = $false
     providerSwitchPerformed = $false
+    readFileSliceProposalEnabled = [bool]$EnableReadFileSliceProposal
 }
 if (-not $Execute) { return $plan }
 
@@ -226,6 +232,7 @@ $metadata = [ordered]@{
     endpoint = [ordered]@{ uri = $Endpoint.AbsoluteUri; isLoopback = $true; wireApi = 'ollama-chat' }
     model = [ordered]@{ requestedId = $ModelId; observedId = $observedModel; expectedDigest = $ModelDigest.ToLowerInvariant(); digestAttestation = 'unverified-caller-declaration' }
     limits = [ordered]@{ timeoutSeconds = $TimeoutSeconds; maxPromptBytes = $MaxPromptBytes; maxRequestBytes = $MaxRequestBytes; maxResponseBytes = $MaxResponseBytes; maxOutputTokens = $MaxOutputTokens }
+    toolProposal = [ordered]@{ readFileSliceEnabled = [bool]$EnableReadFileSliceProposal; maximumBytes = $ReadFileSliceMaximumBytes }
     observation = [ordered]@{ httpStatusCode = $httpStatusCode; done = $done; toolCallCount = $toolCallCount; toolDisposition = if ($toolCallCount -gt 0) { 'PROPOSED_NOT_EXECUTED' } else { 'NONE' } }
     effects = [ordered]@{ networkPerformed = $networkPerformed; writePerformed = $true; toolExecutionPerformed = $false; desktopLifecyclePerformed = $false; providerSwitchPerformed = $false; transportPerformed = $false }
     artifacts = [ordered]@{

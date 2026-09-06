@@ -7,6 +7,8 @@ param(
     [ValidateRange(1024, 10485760)][long]$MaxMetadataBytes = 1048576,
     [ValidateRange(1024, 10485760)][long]$MaxRequestBytes = 1048576,
     [ValidateRange(1024, 1073741824)][long]$MaxResponseBytes = 16777216,
+    [ValidateRange(1, 1048576)][int]$ReadFileSliceMaximumBytes = 65536,
+    [switch]$ExpectReadFileSliceProposal,
     [switch]$AcceptUnverifiedModelDigest,
     [switch]$AllowFixtureEvidence,
     [switch]$NoThrow,
@@ -107,6 +109,8 @@ foreach ($name in @('toolExecutionPerformed','desktopLifecyclePerformed','provid
 if (-not(Test-ExactBoolean (Get-Value $effects 'writePerformed') $true)) { Add-Failure 'Effects.Capture' }
 if ($captureMode -eq 'LiveLoopback' -and -not(Test-ExactBoolean (Get-Value $effects 'networkPerformed') $true)) { Add-Failure 'Effects.Network' }
 if ($captureMode -eq 'Fixture' -and -not(Test-ExactBoolean (Get-Value $effects 'networkPerformed') $false)) { Add-Failure 'Effects.Network' }
+$toolProposal=Get-Value $metadata 'toolProposal'
+if(-not(Test-ExactBoolean (Get-Value $toolProposal 'readFileSliceEnabled') ([bool]$ExpectReadFileSliceProposal)) -or -not(Test-IntegerValue (Get-Value $toolProposal 'maximumBytes')) -or [int64](Get-Value $toolProposal 'maximumBytes') -ne $ReadFileSliceMaximumBytes){Add-Failure 'ToolProposal'}
 $observation = Get-Value $metadata 'observation'
 $statusCodeValue = Get-Value $observation 'httpStatusCode'
 $statusCode = if(Test-IntegerValue $statusCodeValue){[int]$statusCodeValue}else{0}
@@ -137,7 +141,7 @@ if ($requestPath) {
     if (-not(Test-JsonNesting -Text $artifactSnapshots['request'].Text)) { Add-Failure 'Request.JsonNesting'; $request = $null }
     else { try { $request = $artifactSnapshots['request'].Text | ConvertFrom-Json } catch { Add-Failure 'Request.Json'; $request = $null } }
     if ($request) {
-        Test-Allowlist -Object $request -Allowed @('model','messages','stream','think','keep_alive','options') -Gate 'Request.Properties'
+        Test-Allowlist -Object $request -Allowed @('model','messages','stream','think','keep_alive','options','tools') -Gate 'Request.Properties'
         if ([string](Get-Value $request 'model') -cne $ExpectedModelId) { Add-Failure 'Request.ModelId' }
         if (-not(Test-ExactBoolean (Get-Value $request 'stream') $false)) { Add-Failure 'Request.Stream' }
         if (-not(Test-ExactBoolean (Get-Value $request 'think') $false)) { Add-Failure 'Request.Think' }
@@ -149,7 +153,11 @@ if ($requestPath) {
         Test-Allowlist -Object $options -Allowed @('temperature','num_predict','seed') -Gate 'Request.OptionsProperties'
         $numPredict = Get-Value $options 'num_predict'
         if(-not(Test-IntegerValue $numPredict) -or [int64]$numPredict -lt 1 -or [int64]$numPredict -gt 1048576){Add-Failure 'Request.MaxOutputTokens'}
-        if ($null -ne (Get-Value $request 'tools')) { Add-Failure 'Request.Tools' }
+        $requestTools=Get-Value $request 'tools'
+        if($ExpectReadFileSliceProposal){
+            $expectedTools=@([ordered]@{type='function';function=[ordered]@{name='read_file_slice';description='Propose a bounded byte slice from one file. The client does not execute the proposal automatically.';parameters=[ordered]@{type='object';required=@('path','offsetBytes','maximumBytes');properties=[ordered]@{path=[ordered]@{type='string';description='Fully qualified file path inside the separately approved root.'};offsetBytes=[ordered]@{type='integer';minimum=0};maximumBytes=[ordered]@{type='integer';minimum=1;maximum=$ReadFileSliceMaximumBytes}}}}})
+            if(@($requestTools).Count -ne 1 -or ($requestTools|ConvertTo-Json -Depth 10 -Compress) -cne ($expectedTools|ConvertTo-Json -Depth 10 -Compress)){Add-Failure 'Request.Tools'}
+        }elseif($null -ne $requestTools){Add-Failure 'Request.Tools'}
     }
 }
 if ($responsePath) {

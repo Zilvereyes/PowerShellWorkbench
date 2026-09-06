@@ -53,6 +53,7 @@ Then start a new Codex task.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 - Prepare or explicitly invoke one byte- and time-bounded loopback Ollama `/api/chat` request, preserve hash-bound raw request/response evidence, and record tool calls without executing them.
+- Turn one validated `read_file_slice` tool call into a deterministic proposal, require a separate hash-bound approval, execute only a bounded read, and resolve missing evidence as `UNKNOWN` or contradictory evidence as `CONFLICT`.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
 - Recognize an interruption after a hash-verified provider profile write, bind resume evidence to loopback endpoint, wire API, local-model catalog and canonical owned state, and return `ManagedCommitRequired` with `DesktopLifecycleInvoked=False` instead of switching the provider again.
 - Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
@@ -93,6 +94,8 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 
 `Test-PowerShellWorkbenchOllamaEvidence.ps1` separately validates single-read byte snapshots from the hash-bound capture. A model digest remains an unverified caller declaration unless the validator is explicitly told to accept that limitation.
 
+`-EnableReadFileSliceProposal` adds one fixed Ollama function schema to the request. It does not execute the returned call. `New-PowerShellWorkbenchReadOnlyToolProposal.ps1` converts a validated response into a deterministic proposal; `New-PowerShellWorkbenchReadOnlyToolApproval.ps1` previews unless `-Approve` is explicit; and `Invoke-PowerShellWorkbenchReadOnlyTool.ps1` previews unless `-Execute` is explicit. Proposal, approval, target and observation are independently hash-bound, output writes require a separate scoped evidence root, and no stage performs transport. The wire schema follows Ollama's official [tool-calling contract](https://docs.ollama.com/capabilities/tool-calling).
+
 ```powershell
 $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `
     -Prompt 'Explain this script.' `
@@ -100,6 +103,7 @@ $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `
     -ModelDigest '<independently-recorded-model-digest>'
 
 # Add -Execute only after reviewing the preview and intended local model call.
+# Add -EnableReadFileSliceProposal only when the fixed proposal schema is intended.
 ```
 
 ## Useful diagnostics

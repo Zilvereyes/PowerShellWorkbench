@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "proposalId": "<deterministic-proposal-id>",
+  "createdAt": "<authoritative-ISO-8601-timestamp>",
+  "source": {
+    "kind": "ollama-tool-call",
+    "metadataSha256": "<64-hex-metadata-sha256>",
+    "responseSha256": "<64-hex-response-sha256>",
+    "toolCallIndex": 0
+  },
+  "tool": {
+    "name": "read_file_slice",
+    "arguments": {
+      "path": "<fully-qualified-path-within-approved-root>",
+      "offsetBytes": 0,
+      "maximumBytes": 4096
+    }
+  }
+}
