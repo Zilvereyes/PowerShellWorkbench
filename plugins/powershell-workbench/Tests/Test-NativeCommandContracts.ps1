@@ -33,5 +33,6 @@ try{
 
     $report=Get-Content -LiteralPath $run.ReportPath -Raw|ConvertFrom-Json
     if($report.Succeeded -ne $true -or $report.VerificationState -ne 'Passed' -or $report.VerificationScope -ne 'ProcessLaunch'){throw 'Persisted native command report did not preserve result semantics.'}
+    $global:LASTEXITCODE=0
     'PowerShell Workbench native command contracts passed.'
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}
