@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1.0",
+  "catalogId": "powershell-workbench-authoritative-documentation",
+  "verifiedAtUtc": "2026-09-06T00:00:00Z",
+  "domains": [
+    {
+      "id": "powershell",
+      "skill": "powershell-docs",
+      "allowedHosts": ["learn.microsoft.com"],
+      "sources": [
+        {
+          "id": "portal",
+          "url": "https://learn.microsoft.com/en-us/powershell/",
+          "purpose": "Product documentation and module-reference entrypoint",
+          "versionScope": "Select the documented PowerShell or Windows PowerShell view before making version-specific claims"
+        },
+        {
+          "id": "language",
+          "url": "https://learn.microsoft.com/en-us/powershell/scripting/overview",
+          "purpose": "PowerShell language and platform overview",
+          "versionScope": "Use the page view selector for the target PowerShell version"
+        },
+        {
+          "id": "about",
+          "url": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about",
+          "purpose": "Authoritative about-topic index",
+          "versionScope": "Use the page view selector for the target PowerShell version"
+        }
+      ]
+    },
+    {
+      "id": "microsoft-dism",
+      "skill": "microsoft-dism-docs",
+      "allowedHosts": ["learn.microsoft.com"],
+      "sources": [
+        {
+          "id": "technical-reference",
+          "url": "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism---deployment-image-servicing-and-management-technical-reference-for-windows",
+          "purpose": "DISM.exe platform and technical-reference entrypoint",
+          "versionScope": "Select the Windows version documented for the target image and host"
+        },
+        {
+          "id": "powershell-module",
+          "url": "https://learn.microsoft.com/en-us/powershell/module/dism/",
+          "purpose": "DISM PowerShell module and cmdlet reference",
+          "versionScope": "Select the Windows Server or client module view that matches the target"
+        },
+        {
+          "id": "powershell-mapping",
+          "url": "https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/use-dism-in-windows-powershell-s14",
+          "purpose": "DISM.exe to PowerShell cmdlet mapping and WinPE notes",
+          "versionScope": "Select the Windows version documented for the target environment"
+        }
+      ]
+    },
+    {
+      "id": "microsoft-update",
+      "skill": "microsoft-update-docs",
+      "allowedHosts": ["learn.microsoft.com", "support.microsoft.com"],
+      "sources": [
+        {
+          "id": "windows-update-overview",
+          "url": "https://learn.microsoft.com/en-us/windows/deployment/update/windows-update-overview",
+          "purpose": "Windows Update and Unified Update Platform architecture",
+          "versionScope": "Verify the Applies to and last-updated metadata for the target Windows release"
+        },
+        {
+          "id": "client-policies",
+          "url": "https://learn.microsoft.com/en-us/windows/deployment/update/waas-wufb-csp-mdm",
+          "purpose": "Windows Update client policy and MDM guidance",
+          "versionScope": "Verify current policy names and supported Windows releases"
+        },
+        {
+          "id": "update-settings",
+          "url": "https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings",
+          "purpose": "Windows Update policy and service-location settings",
+          "versionScope": "Verify current policy mappings before applying configuration guidance"
+        },
+        {
+          "id": "update-history",
+          "url": "https://support.microsoft.com/en-us/topic/windows-11-update-history-a19cd69f-79f0-59f7-1c8f-5f8b1953af24",
+          "purpose": "Windows 11 release and cumulative-update history",
+          "versionScope": "Select the exact Windows release and build before citing an update"
+        }
+      ]
+    },
+    {
+      "id": "ollama",
+      "skill": "ollama-docs",
+      "allowedHosts": ["docs.ollama.com"],
+      "sources": [
+        {
+          "id": "index",
+          "url": "https://docs.ollama.com/llms.txt",
+          "purpose": "Machine-readable official documentation index",
+          "versionScope": "Living documentation; re-open the relevant page for current behavior"
+        },
+        {
+          "id": "api-introduction",
+          "url": "https://docs.ollama.com/api/introduction",
+          "purpose": "Official API entrypoint and versioning statement",
+          "versionScope": "Living API documentation; distinguish local and cloud endpoints"
+        },
+        {
+          "id": "chat-api",
+          "url": "https://docs.ollama.com/api/chat",
+          "purpose": "Chat request and response contract",
+          "versionScope": "Verify fields against the installed Ollama version when behavior matters"
+        },
+        {
+          "id": "tool-calling",
+          "url": "https://docs.ollama.com/capabilities/tool-calling",
+          "purpose": "Tool definition and model-returned tool-call contract",
+          "versionScope": "A returned tool call is a proposal, not execution evidence"
+        },
+        {
+          "id": "structured-outputs",
+          "url": "https://docs.ollama.com/capabilities/structured-outputs",
+          "purpose": "Structured JSON and schema-constrained output",
+          "versionScope": "Verify model and installed-runtime support separately"
+        },
+        {
+          "id": "usage",
+          "url": "https://docs.ollama.com/api/usage",
+          "purpose": "Token and duration metrics returned by the API",
+          "versionScope": "Verify field presence in captured runtime evidence"
+        }
+      ]
+    }
+  ]
+}
