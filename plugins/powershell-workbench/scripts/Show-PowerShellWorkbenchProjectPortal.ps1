@@ -10,6 +10,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Private\Write-PowerShellWorkbenchUtf8NoBom.ps1')
 
 function Write-PortalBlock {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Operator-visible, color-coded configuration blocks are an explicit workbench feature.')]
@@ -37,10 +38,10 @@ $resolvedProfilePath = [IO.Path]::GetFullPath($ProfilePath)
 if (-not (Test-Path -LiteralPath $resolvedProfilePath -PathType Leaf)) {
     if (-not $NoWrite) { throw "Project profile was not found: $resolvedProfilePath. Create it first with New-PowerShellWorkbenchProjectProfile.ps1." }
     $profileRoot = if ($PSBoundParameters.ContainsKey('ProjectRoot')) { $ProjectRoot } else { (Get-Location).Path }
-    $profileName = Split-Path -Leaf (Split-Path -Parent $resolvedProfilePath)
+    $profileName = Split-Path -Leaf ([IO.Path]::GetFullPath($profileRoot))
     if (-not $profileName) { $profileName = Split-Path -Leaf (Get-Location) }
     $created = & $newProfileScript -ProjectRoot $profileRoot -Name $profileName -Destination $resolvedProfilePath -NoWrite
-    $config = $created.ProfileDocument
+    $config = $created.ProfileDocument | ConvertTo-Json -Depth 12 | ConvertFrom-Json
     if (-not $config) { throw "Unable to preview missing profile as JSON for $resolvedProfilePath." }
 } else {
     $config = Get-Content -LiteralPath $resolvedProfilePath -Raw | ConvertFrom-Json
@@ -69,13 +70,15 @@ foreach ($entry in @($(if ($WorkingPath) { $WorkingPath.GetEnumerator() }))) {
 if ($PSBoundParameters.ContainsKey('WindowsTarget')) { $config.targets.windows = @($WindowsTarget); $changed = $true }
 
 if ($changed -and -not $NoWrite) {
-    $config | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $resolvedProfilePath -Encoding UTF8
+    Write-PowerShellWorkbenchUtf8NoBom -Path $resolvedProfilePath -Content ($config | ConvertTo-Json -Depth 12)
     Write-PortalBlock -Title 'PROFILE GEMT' -Lines @($resolvedProfilePath, 'Kun den angivne projektkonfiguration blev opdateret.') -Color Green
 }
 elseif ($changed) { Write-PortalBlock -Title 'FORHANDSVISNING' -Lines @('NoWrite er aktiv: ingen fil blev aendret.') -Color Yellow }
 
 $componentLines = @($config.components | ForEach-Object { "{0}: {1}" -f $_.id, $_.root })
-$pathLines = @($config.paths.PSObject.Properties | ForEach-Object { "{0}: {1}" -f $_.Name, $_.Value })
+$configuredProjectRoot = [string]$config.project.root
+$portalProjectRoot = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($configuredProjectRoot)) { $configuredProjectRoot } else { Join-Path (Split-Path -Parent $resolvedProfilePath) $configuredProjectRoot }))
+$pathLines = @($config.paths.PSObject.Properties | ForEach-Object { "{0}: {1} -> {2}" -f $_.Name, $_.Value, [IO.Path]::GetFullPath((Join-Path $portalProjectRoot ([string]$_.Value))) })
 $targetLines = @($config.targets.windows | ForEach-Object { "Windows: $_" })
 Write-PortalBlock -Title 'PROJECT PORTAL' -Lines @("Profile: $resolvedProfilePath", "Project root: $($config.project.root)", "Mode: $(if ($changed) { if ($NoWrite) { 'preview' } else { 'updated' } } else { 'read-only overview' })") -Color Cyan
 Write-PortalBlock -Title 'COMPONENT ROOTS' -Lines $(if ($componentLines.Count) { $componentLines } else { 'No component roots configured.' }) -Color Magenta

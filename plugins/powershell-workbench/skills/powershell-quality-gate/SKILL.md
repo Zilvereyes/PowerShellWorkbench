@@ -11,7 +11,7 @@ For a mixed project, first use the technology map from `Resolve-PowerShellWorkbe
 Run only the requested tier, expanding to later tiers only when the user asks:
 
 1. Parse targeted files in both `powershell.exe` and `pwsh`.
-2. Run `../../scripts/Test-PowerShellWorkbenchAutomaticVariables.ps1 -NoThrow` before executable servicing or recovery work. It uses the PowerShell parser directly and avoids shell-quoted `-Command` wrappers.
+2. Run `../../scripts/Test-PowerShellWorkbenchAutomaticVariables.ps1 -Path <target.ps1> -NoThrow` before executable servicing or recovery work. It uses the PowerShell parser directly and avoids shell-quoted `-Command` wrappers. Keep `-Path` explicit so the scan scope is never inferred from the current directory.
 3. For an explicitly requested native operation, use `../../scripts/Invoke-PowerShellWorkbenchNativeCommand.ps1` for visible operator blocks, streamed output, redacted JSON/timeline reporting, accepted exit-code handling, and an optional scoped post-check.
    Treat `Succeeded` as execution status and `VerificationState` (`NotRun`, `Passed`, or `Failed`) as separate evidence. Use `-RequireVerification` when a passed post-check is mandatory. Use `-AnalyzeOnly` for report-only preflight; it never starts the target process.
 4. Import the targeted module in both runtimes when import is safe and requested.

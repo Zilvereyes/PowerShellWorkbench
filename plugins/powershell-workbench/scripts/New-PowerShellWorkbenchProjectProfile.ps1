@@ -9,6 +9,7 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Private\Write-PowerShellWorkbenchUtf8NoBom.ps1')
 $ProjectRoot=(Resolve-Path -LiteralPath $ProjectRoot -ErrorAction Stop).Path
 if(-not $Name){$Name=Split-Path -Leaf $ProjectRoot}
 if(-not $Destination){$Destination=Join-Path $ProjectRoot '.powershell-workbench\project-profile.json'}
@@ -36,6 +37,6 @@ if($NoWrite){
 if($PSCmdlet.ShouldProcess($Destination,'Create portable PowerShell Workbench project profile')){
     $directory=Split-Path -Parent $Destination
     if(-not(Test-Path -LiteralPath $directory -PathType Container)){New-Item -ItemType Directory -Path $directory -Force|Out-Null}
-    $profileDocument|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $Destination -Encoding UTF8
+    Write-PowerShellWorkbenchUtf8NoBom -Path $Destination -Content ($profileDocument | ConvertTo-Json -Depth 8)
     [pscustomobject]@{ProfilePath=$Destination;ProjectRoot=$ProjectRoot;Name=$Name}
 }

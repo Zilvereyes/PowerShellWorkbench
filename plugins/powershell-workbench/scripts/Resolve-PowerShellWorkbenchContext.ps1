@@ -11,7 +11,9 @@ param(
     [ValidateRange(0, 10)]
     [int]$MaxDepth = 3,
 
-    [switch]$Fast
+    [switch]$Fast,
+
+    [switch]$AllowAncestorHeuristics
 )
 
 Set-StrictMode -Version 2.0
@@ -132,11 +134,18 @@ function Get-PowerShellRuntimeInventory {
         $resolved = (Resolve-Path -LiteralPath $RuntimePath).Path
         if ($seen.ContainsKey($resolved)) { return }
         $seen[$resolved] = $true
-        $probe = '$PSVersionTable.PSEdition; $PSVersionTable.PSVersion.ToString()'
+        $probe = '$PSVersionTable.PSEdition; $PSVersionTable.PSVersion.ToString(); if (''System.Runtime.InteropServices.RuntimeInformation'' -as [type]) { [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() } elseif ([Environment]::Is64BitProcess) { ''X64'' } else { ''X86'' }'
         $encodedProbe = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($probe))
         $versionLines = @(& $resolved -NoProfile -EncodedCommand $encodedProbe 2>$null)
-        if ($LASTEXITCODE -ne 0 -or $versionLines.Count -lt 2) { $versionLines = @('Unknown', 'Unknown') }
-        $architecture = if ($resolved -match '(?i)(x64|amd64)') { 'x64' } elseif ($resolved -match '(?i)x86') { 'x86' } else { 'Unknown' }
+        if ($LASTEXITCODE -ne 0 -or $versionLines.Count -lt 3) { $versionLines = @('Unknown', 'Unknown', 'Unknown') }
+        $architecture = switch -Regex ([string]$versionLines[2]) {
+            '^(?i)(x64|amd64)$' { 'x64'; break }
+            '^(?i)x86$' { 'x86'; break }
+            '^(?i)arm64$' { 'arm64'; break }
+            default {
+                if ($resolved -match '(?i)(x64|amd64)') { 'x64' } elseif ($resolved -match '(?i)x86') { 'x86' } else { 'Unknown' }
+            }
+        }
         $runtimes.Add([pscustomobject]@{
             Path=$resolved
             Edition=[string]$versionLines[0]
@@ -197,15 +206,22 @@ foreach ($root in $ancestors) {
     if ($explicitProfile) {
         $scan = Get-DirectoryScan -Path $root
         $servicing = Get-CachedServicingInventory -Path $root
-        $profileName = $explicitProfile.Profile
-        $profileEvidence = $explicitProfile.Evidence
-        if ($profileName -eq 'Generic' -and $servicing.Detected) {
+        $profileName = if ($RequestedProfile -eq 'Auto') { $explicitProfile.Profile } else { $RequestedProfile }
+        $profileEvidence = if ($RequestedProfile -eq 'Auto') { $explicitProfile.Evidence } else { 'RequestedProfile:' + $RequestedProfile }
+        if ($RequestedProfile -eq 'Auto' -and $profileName -eq 'Generic' -and $servicing.Detected) {
             $profileName = 'WindowsServicingToolkit'
             $profileEvidence = 'Capability:WindowsServicingToolkit'
         }
         Get-ContextResult -ProfileName $profileName -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $explicitProfile.Evidence -ProfileEvidence $profileEvidence -ServicingInventory $servicing -DirectoryScan $scan
         return
     }
+}
+
+if ($RequestedProfile -ne 'Auto') {
+    $scan = Get-DirectoryScan -Path $candidate
+    $servicing = Get-CachedServicingInventory -Path $candidate
+    Get-ContextResult -ProfileName $RequestedProfile -ProjectRoot $candidate -Source 'RequestedProfile' -ProjectRootEvidence $candidate -ProfileEvidence ('RequestedProfile:' + $RequestedProfile) -ServicingInventory $servicing -DirectoryScan $scan
+    return
 }
 
 if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
@@ -228,18 +244,19 @@ foreach ($project in @($registry.projects)) {
     }
 }
 
-foreach ($root in $ancestors) {
+$heuristicRoots = if ($AllowAncestorHeuristics) { @($ancestors | Where-Object { $_.TrimEnd([char[]]'\\/') -ne [IO.Path]::GetPathRoot($_).TrimEnd([char[]]'\\/') }) } else { @($candidate) }
+foreach ($root in $heuristicRoots) {
     $scan = Get-DirectoryScan -Path $root
     $servicing = Get-CachedServicingInventory -Path $root
     $detectedProfile = Get-ProfileAtPath -Path $root -ServicingInventory $servicing -DirectoryScan $scan
-    if ($detectedProfile -and ($RequestedProfile -in @('Auto', $detectedProfile) -or ($RequestedProfile -eq 'Generic' -and $detectedProfile -eq 'Generic'))) {
+    if ($detectedProfile) {
         Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $root -Source 'Ancestor' -ProjectRootEvidence $root -ProfileEvidence ('HeuristicProfile:' + $detectedProfile) -ServicingInventory $servicing -DirectoryScan $scan
         return
     }
 }
 
-if ($RequestedProfile -in @('Auto', 'Generic') -and $ancestors.Count -gt 0) {
-    Get-ContextResult -ProfileName 'Generic' -ProjectRoot ($ancestors[-1]) -Source 'StartPath' -ProjectRootEvidence $ancestors[-1] -ProfileEvidence 'StartPathFallback'
+if ($RequestedProfile -eq 'Auto') {
+    Get-ContextResult -ProfileName 'Generic' -ProjectRoot $candidate -Source 'StartPath' -ProjectRootEvidence $candidate -ProfileEvidence 'StartPathFallback'
     return
 }
 
