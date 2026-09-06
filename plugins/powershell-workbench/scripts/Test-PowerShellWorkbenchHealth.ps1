@@ -79,31 +79,31 @@ $distributionResults = New-Object System.Collections.Generic.List[object]
 $distributionNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $sourcePaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $cachePaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-if (@($Distribution).Count -eq 0) { Add-FailedGate 'DistributionEvidenceRequired' '<distribution>' 'At least one distribution is required.' }
+if (@($Distribution).Count -eq 0) { Add-FailedGate -Gate 'DistributionEvidenceRequired' -Subject '<distribution>' -Message 'At least one distribution is required.' }
 
 foreach ($entry in @($Distribution)) {
     $name = [string](Get-PropertyValue -InputObject $entry -Name 'Name')
     $sourceInput = [string](Get-PropertyValue -InputObject $entry -Name 'SourcePath')
     $cacheInput = [string](Get-PropertyValue -InputObject $entry -Name 'CachePath')
     $subject = if ([string]::IsNullOrWhiteSpace($name)) { '<unnamed>' } else { $name }
-    if ([string]::IsNullOrWhiteSpace($name)) { Add-FailedGate 'DistributionNamePresent' $subject 'Distribution name is missing.' }
-    elseif (-not $distributionNames.Add($name)) { Add-FailedGate 'DistributionNameUnique' $subject 'Distribution name is duplicated.' }
+    if ([string]::IsNullOrWhiteSpace($name)) { Add-FailedGate -Gate 'DistributionNamePresent' -Subject $subject -Message 'Distribution name is missing.' }
+    elseif (-not $distributionNames.Add($name)) { Add-FailedGate -Gate 'DistributionNameUnique' -Subject $subject -Message 'Distribution name is duplicated.' }
 
     $sourcePath = $null
     $cachePath = $null
     if ([string]::IsNullOrWhiteSpace($sourceInput) -or -not [IO.Path]::IsPathRooted($sourceInput)) {
-        Add-FailedGate 'DistributionSourcePathAbsolute' $subject 'SourcePath must be absolute.'
+        Add-FailedGate -Gate 'DistributionSourcePathAbsolute' -Subject $subject -Message 'SourcePath must be absolute.'
     } else {
         $sourcePath = [IO.Path]::GetFullPath($sourceInput)
-        if (-not $sourcePaths.Add($sourcePath)) { Add-FailedGate 'DistributionSourcePathUnique' $subject 'SourcePath is duplicated.' }
+        if (-not $sourcePaths.Add($sourcePath)) { Add-FailedGate -Gate 'DistributionSourcePathUnique' -Subject $subject -Message 'SourcePath is duplicated.' }
     }
     if ([string]::IsNullOrWhiteSpace($cacheInput) -or -not [IO.Path]::IsPathRooted($cacheInput)) {
-        Add-FailedGate 'DistributionCachePathAbsolute' $subject 'CachePath must be absolute.'
+        Add-FailedGate -Gate 'DistributionCachePathAbsolute' -Subject $subject -Message 'CachePath must be absolute.'
     } else {
         $cachePath = [IO.Path]::GetFullPath($cacheInput)
-        if (-not $cachePaths.Add($cachePath)) { Add-FailedGate 'DistributionCachePathUnique' $subject 'CachePath is duplicated.' }
+        if (-not $cachePaths.Add($cachePath)) { Add-FailedGate -Gate 'DistributionCachePathUnique' -Subject $subject -Message 'CachePath is duplicated.' }
     }
-    if ($sourcePath -and $cachePath -and $sourcePath -ieq $cachePath) { Add-FailedGate 'DistributionSourceCacheDistinct' $subject 'SourcePath and CachePath must be distinct.' }
+    if ($sourcePath -and $cachePath -and $sourcePath -ieq $cachePath) { Add-FailedGate -Gate 'DistributionSourceCacheDistinct' -Subject $subject -Message 'SourcePath and CachePath must be distinct.' }
 
     $sourceVersion = $null
     $cacheVersion = $null
@@ -113,34 +113,34 @@ foreach ($entry in @($Distribution)) {
         if (-not $side.Path) { continue }
         $existsGate = 'Distribution{0}Exists' -f $side.Kind
         if (-not (Test-Path -LiteralPath $side.Path -PathType Container)) {
-            Add-FailedGate $existsGate $subject "$($side.Kind) plugin root is missing."
+            Add-FailedGate -Gate $existsGate -Subject $subject -Message "$($side.Kind) plugin root is missing."
             continue
         }
         $manifestPath = Join-Path $side.Path '.codex-plugin\plugin.json'
         $manifestGate = 'Distribution{0}ManifestValid' -f $side.Kind
         if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-            Add-FailedGate $manifestGate $subject "$($side.Kind) plugin manifest is missing."
+            Add-FailedGate -Gate $manifestGate -Subject $subject -Message "$($side.Kind) plugin manifest is missing."
             continue
         }
         try { $manifest = Read-JsonFile -Path $manifestPath }
-        catch { Add-FailedGate $manifestGate $subject "$($side.Kind) plugin manifest is invalid JSON."; continue }
+        catch { Add-FailedGate -Gate $manifestGate -Subject $subject -Message "$($side.Kind) plugin manifest is invalid JSON."; continue }
         if ([string](Get-PropertyValue -InputObject $manifest -Name 'name') -cne 'powershell-workbench') {
-            Add-FailedGate ('Distribution{0}Identity' -f $side.Kind) $subject "$($side.Kind) plugin name is not powershell-workbench."
+            Add-FailedGate -Gate ('Distribution{0}Identity' -f $side.Kind) -Subject $subject -Message "$($side.Kind) plugin name is not powershell-workbench."
         }
         $version = [string](Get-PropertyValue -InputObject $manifest -Name 'version')
         if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
-            Add-FailedGate ('Distribution{0}VersionValid' -f $side.Kind) $subject "$($side.Kind) plugin version is missing or unknown."
+            Add-FailedGate -Gate ('Distribution{0}VersionValid' -f $side.Kind) -Subject $subject -Message "$($side.Kind) plugin version is missing or unknown."
         } elseif ($version -cne $ExpectedVersion) {
-            Add-FailedGate ('Distribution{0}VersionExpected' -f $side.Kind) $subject "$($side.Kind) plugin version '$version' does not match '$ExpectedVersion'."
+            Add-FailedGate -Gate ('Distribution{0}VersionExpected' -f $side.Kind) -Subject $subject -Message "$($side.Kind) plugin version '$version' does not match '$ExpectedVersion'."
         }
         if ($side.Kind -eq 'Source') { $sourceVersion = $version } else { $cacheVersion = $version }
         try {
             $tree = Get-TreeIdentity -Root $side.Path
             if ($side.Kind -eq 'Source') { $sourceTree = $tree } else { $cacheTree = $tree }
-        } catch { Add-FailedGate ('Distribution{0}TreeReadable' -f $side.Kind) $subject $_.Exception.Message }
+        } catch { Add-FailedGate -Gate ('Distribution{0}TreeReadable' -f $side.Kind) -Subject $subject -Message $_.Exception.Message }
     }
     if ($sourceTree -and $cacheTree -and ($sourceTree.FileCount -ne $cacheTree.FileCount -or $sourceTree.Sha256 -cne $cacheTree.Sha256)) {
-        Add-FailedGate 'DistributionTreeIdentity' $subject 'Source and installed cache trees differ.'
+        Add-FailedGate -Gate 'DistributionTreeIdentity' -Subject $subject -Message 'Source and installed cache trees differ.'
     }
     $distributionResults.Add([pscustomobject][ordered]@{
         Name=$name;SourcePath=$sourcePath;CachePath=$cachePath;SourceVersion=$sourceVersion;CacheVersion=$cacheVersion
@@ -151,52 +151,52 @@ foreach ($entry in @($Distribution)) {
 
 $catalogResults = New-Object System.Collections.Generic.List[object]
 $catalogPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-if ($RequireCatalog -and @($CatalogManifestPath).Count -eq 0) { Add-FailedGate 'CatalogEvidenceRequired' '<catalog>' 'At least one catalog manifest is required.' }
+if ($RequireCatalog -and @($CatalogManifestPath).Count -eq 0) { Add-FailedGate -Gate 'CatalogEvidenceRequired' -Subject '<catalog>' -Message 'At least one catalog manifest is required.' }
 foreach ($manifestInput in @($CatalogManifestPath)) {
     $manifestPath = Get-CanonicalPath -Path $manifestInput -BasePath (Get-Location).Path
     $subject = if ($manifestPath) { $manifestPath } else { '<catalog>' }
     if (-not $manifestPath -or -not $catalogPaths.Add($manifestPath)) {
-        Add-FailedGate 'CatalogManifestPathUnique' $subject 'Catalog manifest path is empty or duplicated.'
+        Add-FailedGate -Gate 'CatalogManifestPathUnique' -Subject $subject -Message 'Catalog manifest path is empty or duplicated.'
         continue
     }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        Add-FailedGate 'CatalogManifestExists' $subject 'Catalog manifest is missing.'
+        Add-FailedGate -Gate 'CatalogManifestExists' -Subject $subject -Message 'Catalog manifest is missing.'
         continue
     }
     try { $manifest = Read-JsonFile -Path $manifestPath }
-    catch { Add-FailedGate 'CatalogManifestValid' $subject 'Catalog manifest is invalid JSON.'; continue }
+    catch { Add-FailedGate -Gate 'CatalogManifestValid' -Subject $subject -Message 'Catalog manifest is invalid JSON.'; continue }
     $schemaVersion = [string](Get-PropertyValue -InputObject $manifest -Name 'schemaVersion')
     $generatedAtText = [string](Get-PropertyValue -InputObject $manifest -Name 'generatedAtUtc')
     $model = [string](Get-PropertyValue -InputObject $manifest -Name 'model')
     $contextWindowText = [string](Get-PropertyValue -InputObject $manifest -Name 'contextWindow')
     $codexVersion = [string](Get-PropertyValue -InputObject $manifest -Name 'codexVersion')
-    if ($schemaVersion -cne '1.1') { Add-FailedGate 'CatalogSchemaVersion' $subject 'Catalog schema version is unknown.' }
+    if ($schemaVersion -cne '1.1') { Add-FailedGate -Gate 'CatalogSchemaVersion' -Subject $subject -Message 'Catalog schema version is unknown.' }
     $generatedAt = [datetimeoffset]::MinValue
     if (-not [datetimeoffset]::TryParse($generatedAtText,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind,[ref]$generatedAt)) {
-        Add-FailedGate 'CatalogGeneratedAtValid' $subject 'Catalog generation time is invalid.'
+        Add-FailedGate -Gate 'CatalogGeneratedAtValid' -Subject $subject -Message 'Catalog generation time is invalid.'
     } else {
         $age = $ReferenceTimeUtc.ToUniversalTime() - $generatedAt.ToUniversalTime()
-        if ($age.TotalSeconds -lt 0 -or $age.TotalHours -gt $MaximumCatalogAgeHours) { Add-FailedGate 'CatalogFreshness' $subject 'Catalog evidence is stale or from the future.' }
+        if ($age.TotalSeconds -lt 0 -or $age.TotalHours -gt $MaximumCatalogAgeHours) { Add-FailedGate -Gate 'CatalogFreshness' -Subject $subject -Message 'Catalog evidence is stale or from the future.' }
     }
     $contextWindow = [int64]0
-    if ([string]::IsNullOrWhiteSpace($model) -or -not [int64]::TryParse($contextWindowText,[ref]$contextWindow) -or $contextWindow -le 0) { Add-FailedGate 'CatalogModelIdentity' $subject 'Catalog model or context identity is invalid.' }
-    if ([string]::IsNullOrWhiteSpace($codexVersion)) { Add-FailedGate 'CatalogCodexIdentity' $subject 'Catalog Codex version is missing.' }
+    if ([string]::IsNullOrWhiteSpace($model) -or -not [int64]::TryParse($contextWindowText,[ref]$contextWindow) -or $contextWindow -le 0) { Add-FailedGate -Gate 'CatalogModelIdentity' -Subject $subject -Message 'Catalog model or context identity is invalid.' }
+    if ([string]::IsNullOrWhiteSpace($codexVersion)) { Add-FailedGate -Gate 'CatalogCodexIdentity' -Subject $subject -Message 'Catalog Codex version is missing.' }
     $manifestDirectory = Split-Path -Parent $manifestPath
     $artifactPath = Get-CanonicalPath -Path ([string](Get-PropertyValue -InputObject $manifest -Name 'catalogPath')) -BasePath $manifestDirectory
     $codexPath = Get-CanonicalPath -Path ([string](Get-PropertyValue -InputObject $manifest -Name 'codexPath')) -BasePath $manifestDirectory
     foreach ($artifact in @([pscustomobject]@{Kind='Artifact';Path=$artifactPath;Expected=[string](Get-PropertyValue -InputObject $manifest -Name 'catalogSha256')},[pscustomobject]@{Kind='Codex';Path=$codexPath;Expected=[string](Get-PropertyValue -InputObject $manifest -Name 'codexSha256')})) {
         if (-not $artifact.Path -or -not (Test-Path -LiteralPath $artifact.Path -PathType Leaf)) {
-            Add-FailedGate ('Catalog{0}Exists' -f $artifact.Kind) $subject "$($artifact.Kind) evidence file is missing."
+            Add-FailedGate -Gate ('Catalog{0}Exists' -f $artifact.Kind) -Subject $subject -Message "$($artifact.Kind) evidence file is missing."
         } elseif ($artifact.Expected -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $artifact.Path -Algorithm SHA256).Hash -ine $artifact.Expected) {
-            Add-FailedGate ('Catalog{0}Hash' -f $artifact.Kind) $subject "$($artifact.Kind) evidence hash does not match."
+            Add-FailedGate -Gate ('Catalog{0}Hash' -f $artifact.Kind) -Subject $subject -Message "$($artifact.Kind) evidence hash does not match."
         }
     }
     if ($artifactPath -and (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
         try {
             $catalog = Read-JsonFile -Path $artifactPath
             $models = @(Get-PropertyValue -InputObject $catalog -Name 'models')
-            if (@($models | Where-Object { [string](Get-PropertyValue -InputObject $_ -Name 'slug') -ceq $model }).Count -ne 1) { Add-FailedGate 'CatalogModelEntry' $subject 'Catalog does not contain exactly one matching model entry.' }
-        } catch { Add-FailedGate 'CatalogArtifactValid' $subject 'Catalog artifact is invalid JSON.' }
+            if (@($models | Where-Object { [string](Get-PropertyValue -InputObject $_ -Name 'slug') -ceq $model }).Count -ne 1) { Add-FailedGate -Gate 'CatalogModelEntry' -Subject $subject -Message 'Catalog does not contain exactly one matching model entry.' }
+        } catch { Add-FailedGate -Gate 'CatalogArtifactValid' -Subject $subject -Message 'Catalog artifact is invalid JSON.' }
     }
     $catalogResults.Add([pscustomobject][ordered]@{ManifestPath=$manifestPath;SchemaVersion=$schemaVersion;GeneratedAtUtc=$generatedAtText;Model=$model;ContextWindow=$contextWindow;CatalogPath=$artifactPath;CodexPath=$codexPath})
 }
