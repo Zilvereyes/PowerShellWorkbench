@@ -48,6 +48,7 @@ Then start a new Codex task.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
 - Package the plugin for another local marketplace, workstation, or Git-backed marketplace.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
+- Validate explicit Git/personal plugin source-cache pairs, expected versions, duplicate roots, and optional hash-bound catalog freshness without writing to the installation.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
@@ -88,6 +89,18 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 
 ```powershell
 & '<plugin-root>\scripts\Get-PowerShellWorkbenchEnvironment.ps1'
+
+$health = & '<plugin-root>\scripts\Test-PowerShellWorkbenchHealth.ps1' `
+    -Distribution @(
+        @{ Name = 'git-marketplace'; SourcePath = '<git-plugin-root>'; CachePath = '<git-cache-root>' },
+        @{ Name = 'personal'; SourcePath = '<personal-plugin-root>'; CachePath = '<personal-cache-root>' }
+    ) `
+    -ExpectedVersion '<expected-version>' `
+    -NoThrow
+
+if (-not $health.Passed) {
+    $health.FailedGates
+}
 
 & '<plugin-root>\scripts\Get-PowerShellWorkbenchProjectInventory.ps1' `
     -Root 'C:\ProjectOne','C:\ProjectTwo'
