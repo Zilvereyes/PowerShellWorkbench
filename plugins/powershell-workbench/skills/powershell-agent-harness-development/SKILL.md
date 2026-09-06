@@ -38,6 +38,7 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
   only new evidence under an explicit scoped evidence root, and never performs transport, process launch, target writes,
   provider switching, Desktop lifecycle, or clipboard access.
 - Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` before relying on installed plugin or catalog evidence. Supply explicit distribution source/cache pairs and catalog manifests; require catalog evidence when a downstream run depends on it. Unknown versions, duplicate roots, tree drift, stale manifests, missing artifacts, and hash drift fail closed without changing the installation.
+- Use `../../scripts/Get-PowerShellWorkbenchStatusDashboard.ps1` with an independently hashed [release-provenance template](assets/templates/release-provenance.json.tmpl) to distinguish declared version, found source/cache trees, and validated release identity. It reuses health gates, binds every source tree to one commit/ref provenance record, returns `UNKNOWN` for missing state and `CONFLICT` for drift, and performs no write, execution, or transport.
 - Use `../../scripts/Get-PowerShellWorkbenchCatalogMigrationPreview.ps1` to assess a schema 1.0 catalog before migration.
   Supply the expected manifest hash, an explicit destination, a scoped allowed write root, and an authoritative reference
   time. The previewer requires fully qualified paths and exact transport scalar types, and rejects stale, future, drifted,
