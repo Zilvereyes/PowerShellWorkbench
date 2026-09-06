@@ -16,9 +16,29 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 function Get-Value { param($Object,[string]$Name,$Default=$null) if($null -eq $Object){return $Default};$property=$Object.PSObject.Properties[$Name];if($null -eq $property){return $Default};$property.Value }
-function Get-Hash { param([string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 $failures = New-Object Collections.Generic.List[string]
 function Add-Failure { param([string]$Name) if(-not $failures.Contains($Name)){$failures.Add($Name)} }
+function Read-BoundedSnapshot {
+    param([string]$LiteralPath,[long]$MaximumBytes)
+    $resolved = (Resolve-Path -LiteralPath $LiteralPath).Path
+    $stream = [IO.File]::Open($resolved, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $memory = [IO.MemoryStream]::new()
+        try {
+            $buffer = New-Object byte[] 8192
+            while (($readCount = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                if ($memory.Length -gt ($MaximumBytes - $readCount)) { throw 'Snapshot exceeds its validator-side byte limit.' }
+                $memory.Write($buffer, 0, $readCount)
+            }
+            $bytes = $memory.ToArray()
+        } finally { $memory.Dispose() }
+    } finally { $stream.Dispose() }
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { $sha256 = ([BitConverter]::ToString($algorithm.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+    $decoder = New-Object Text.UTF8Encoding($false, $true)
+    [pscustomobject]@{ Path = $resolved; Bytes = $bytes.Length; Sha256 = $sha256; Text = $decoder.GetString($bytes) }
+}
 function Test-ExactBoolean { param($Value,[bool]$Expected) $Value -is [bool] -and $Value -eq $Expected }
 function Test-IntegerValue { param($Value) $Value -is [byte] -or $Value -is [sbyte] -or $Value -is [int16] -or $Value -is [uint16] -or $Value -is [int32] -or $Value -is [uint32] -or $Value -is [int64] -or $Value -is [uint64] }
 function Test-Allowlist {
@@ -29,10 +49,10 @@ function Test-Allowlist {
 $requestPath = $null
 $responsePath = $null
 
-$resolvedMetadata = (Resolve-Path -LiteralPath $MetadataPath).Path
-if ((Get-Item -LiteralPath $resolvedMetadata).Length -gt $MaxMetadataBytes) { throw 'Metadata exceeds MaxMetadataBytes.' }
-if ((Get-Hash $resolvedMetadata) -ne $ExpectedMetadataSha256.ToLowerInvariant()) { Add-Failure 'MetadataSha256' }
-try { $metadata = Get-Content -LiteralPath $resolvedMetadata -Raw | ConvertFrom-Json }
+$metadataSnapshot = Read-BoundedSnapshot -LiteralPath $MetadataPath -MaximumBytes $MaxMetadataBytes
+$resolvedMetadata = $metadataSnapshot.Path
+if ($metadataSnapshot.Sha256 -ne $ExpectedMetadataSha256.ToLowerInvariant()) { Add-Failure 'MetadataSha256' }
+try { $metadata = $metadataSnapshot.Text | ConvertFrom-Json }
 catch { throw "Metadata is invalid JSON: $($_.Exception.Message)" }
 if ([string](Get-Value $metadata 'schemaVersion') -cne '1.0') { Add-Failure 'SchemaVersion' }
 if ([string](Get-Value $metadata 'captureStatus') -cne 'Completed') { Add-Failure 'CaptureStatus' }
@@ -43,13 +63,20 @@ $fixture = Get-Value $metadata 'fixture'
 if ($captureMode -eq 'Fixture') {
     $fixturePath = [string](Get-Value $fixture 'path')
     $fixtureSha256 = [string](Get-Value $fixture 'sha256')
-    if (-not $fixturePath -or -not(Test-Path -LiteralPath $fixturePath -PathType Leaf) -or -not $fixtureSha256 -or (Get-Hash $fixturePath) -ne $fixtureSha256.ToLowerInvariant()) { Add-Failure 'FixtureSha256' }
+    if (-not $fixturePath -or -not(Test-Path -LiteralPath $fixturePath -PathType Leaf) -or -not $fixtureSha256) { Add-Failure 'FixtureSha256' }
+    else {
+        try { $fixtureSnapshot = Read-BoundedSnapshot -LiteralPath $fixturePath -MaximumBytes $MaxResponseBytes }
+        catch { Add-Failure 'FixtureSha256'; $fixtureSnapshot = $null }
+        if ($null -ne $fixtureSnapshot -and $fixtureSnapshot.Sha256 -ne $fixtureSha256.ToLowerInvariant()) { Add-Failure 'FixtureSha256' }
+    }
 }
 
 $endpoint = Get-Value $metadata 'endpoint'
 try {
     $uri = [uri][string](Get-Value $endpoint 'uri')
-    $isLoopback = $uri.DnsSafeHost.ToLowerInvariant() -in @('localhost','127.0.0.1','::1','[::1]')
+    $endpointAddress = $null
+    $endpointHost = $uri.DnsSafeHost.Trim('[',']')
+    $isLoopback = [Net.IPAddress]::TryParse($endpointHost,[ref]$endpointAddress) -and [Net.IPAddress]::IsLoopback($endpointAddress)
     if (-not $isLoopback -or $uri.Scheme -cne 'http' -or $uri.AbsolutePath -cne '/api/chat' -or $uri.Query -or $uri.Fragment -or $uri.UserInfo) { Add-Failure 'Endpoint' }
 } catch { Add-Failure 'Endpoint' }
 if (-not(Test-ExactBoolean (Get-Value $endpoint 'isLoopback') $true) -or [string](Get-Value $endpoint 'wireApi') -cne 'ollama-chat') { Add-Failure 'EndpointEvidence' }
@@ -80,18 +107,21 @@ $expectedDisposition = if ($toolCallCount -gt 0) { 'PROPOSED_NOT_EXECUTED' } els
 if ([string](Get-Value $observation 'toolDisposition') -cne $expectedDisposition) { Add-Failure 'ToolDisposition' }
 
 $artifacts = Get-Value $metadata 'artifacts'
+$artifactSnapshots = @{}
 foreach ($name in @('request','response')) {
     $path = [string](Get-Value $artifacts ($name + 'Path'))
     if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { Add-Failure "Artifacts.$name.Missing"; continue }
-    $actualBytes = [long](Get-Item -LiteralPath $path).Length
     $limit = if ($name -eq 'request') { $MaxRequestBytes } else { $MaxResponseBytes }
-    if ($actualBytes -gt $limit) { Add-Failure "Artifacts.$name.Limit"; continue }
+    try { $snapshot = Read-BoundedSnapshot -LiteralPath $path -MaximumBytes $limit }
+    catch { Add-Failure "Artifacts.$name.Limit"; continue }
+    $actualBytes = [long]$snapshot.Bytes
     if ($actualBytes -ne [long](Get-Value $artifacts ($name + 'Bytes') -1)) { Add-Failure "Artifacts.$name.Bytes" }
-    if ((Get-Hash $path) -ne ([string](Get-Value $artifacts ($name + 'Sha256'))).ToLowerInvariant()) { Add-Failure "Artifacts.$name.Sha256" }
+    if ($snapshot.Sha256 -ne ([string](Get-Value $artifacts ($name + 'Sha256'))).ToLowerInvariant()) { Add-Failure "Artifacts.$name.Sha256" }
+    $artifactSnapshots[$name] = $snapshot
     if ($name -eq 'request') { $requestPath = $path } else { $responsePath = $path }
 }
 if ($requestPath) {
-    try { $request = Get-Content -LiteralPath $requestPath -Raw | ConvertFrom-Json }
+    try { $request = $artifactSnapshots['request'].Text | ConvertFrom-Json }
     catch { Add-Failure 'Request.Json'; $request = $null }
     if ($request) {
         Test-Allowlist $request @('model','messages','stream','think','keep_alive','options') 'Request.Properties'
@@ -110,11 +140,11 @@ if ($requestPath) {
     }
 }
 if ($responsePath) {
-    try { $response = Get-Content -LiteralPath $responsePath -Raw | ConvertFrom-Json }
+    try { $response = $artifactSnapshots['response'].Text | ConvertFrom-Json }
     catch { Add-Failure 'Response.Json'; $response = $null }
     if ($response) {
         if ([string](Get-Value $response 'model') -cne $ExpectedModelId) { Add-Failure 'Response.ModelId' }
-        if ((Get-Value $response 'done' $false) -ne $true) { Add-Failure 'Response.Done' }
+        if (-not(Test-ExactBoolean (Get-Value $response 'done') $true)) { Add-Failure 'Response.Done' }
         $responseMessage = Get-Value $response 'message'
         $responseToolCalls = Get-Value $responseMessage 'tool_calls'
         $responseToolCount = if ($null -ne $responseToolCalls) { @($responseToolCalls).Count } else { 0 }

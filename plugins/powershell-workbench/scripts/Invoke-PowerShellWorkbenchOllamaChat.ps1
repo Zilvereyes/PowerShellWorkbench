@@ -21,11 +21,29 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 
-function Get-TextSha256 {
-    param([Parameter(Mandatory)][string]$Text)
+function Get-ByteSha256 {
+    param([Parameter(Mandatory)][byte[]]$Bytes)
     $algorithm = [Security.Cryptography.SHA256]::Create()
-    try { ([BitConverter]::ToString($algorithm.ComputeHash($utf8.GetBytes($Text)))).Replace('-', '').ToLowerInvariant() }
+    try { ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant() }
     finally { $algorithm.Dispose() }
+}
+
+function Read-BoundedSnapshot {
+    param([Parameter(Mandatory)][string]$LiteralPath,[Parameter(Mandatory)][long]$MaximumBytes)
+    $resolved = (Resolve-Path -LiteralPath $LiteralPath).Path
+    $stream = [IO.File]::Open($resolved, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $memory = [IO.MemoryStream]::new()
+        try {
+            $buffer = New-Object byte[] 8192
+            while (($readCount = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                if ($memory.Length -gt ($MaximumBytes - $readCount)) { throw 'PWB_OLLAMA_RESPONSE_LIMIT' }
+                $memory.Write($buffer, 0, $readCount)
+            }
+            $bytes = $memory.ToArray()
+        } finally { $memory.Dispose() }
+    } finally { $stream.Dispose() }
+    [pscustomobject]@{ Path = $resolved; Bytes = $bytes; Sha256 = Get-ByteSha256 -Bytes $bytes }
 }
 
 function Write-NewUtf8File {
@@ -43,9 +61,10 @@ function Get-PropertyValue {
     $property.Value
 }
 
-$endpointHost = $Endpoint.DnsSafeHost.ToLowerInvariant()
-$isLoopback = $endpointHost -in @('localhost', '127.0.0.1', '::1', '[::1]')
-if (-not $isLoopback) { throw 'Ollama chat endpoint must be loopback.' }
+$endpointAddress = $null
+$endpointHost = $Endpoint.DnsSafeHost.Trim('[',']')
+$isLoopback = [Net.IPAddress]::TryParse($endpointHost, [ref]$endpointAddress) -and [Net.IPAddress]::IsLoopback($endpointAddress)
+if (-not $isLoopback) { throw 'Ollama chat endpoint must use a literal loopback IP address.' }
 if ($Endpoint.Scheme -cne 'http') { throw 'Ollama chat endpoint must use http on loopback.' }
 if ($Endpoint.AbsolutePath -cne '/api/chat' -or $Endpoint.Query -or $Endpoint.Fragment -or -not [string]::IsNullOrEmpty($Endpoint.UserInfo)) {
     throw 'Ollama chat endpoint must be the exact credential-free /api/chat endpoint without query or fragment.'
@@ -68,7 +87,7 @@ $request = [ordered]@{
 $requestJson = $request | ConvertTo-Json -Depth 10 -Compress
 $requestBytes = $utf8.GetBytes($requestJson)
 if ($requestBytes.Length -gt $MaxRequestBytes) { throw 'Serialized request exceeds MaxRequestBytes.' }
-$requestSha256 = Get-TextSha256 -Text $requestJson
+$requestSha256 = Get-ByteSha256 -Bytes $requestBytes
 $plan = [pscustomobject][ordered]@{
     result = if ($Execute) { 'EXECUTION_REQUESTED' } else { 'ANALYZE_ONLY' }
     endpoint = $Endpoint.AbsoluteUri
@@ -111,10 +130,10 @@ $client = $null
 $handler = $null
 try {
     if ($FixtureResponsePath) {
-        $fixtureResolved = (Resolve-Path -LiteralPath $FixtureResponsePath).Path
-        if ((Get-Item -LiteralPath $fixtureResolved).Length -gt $MaxResponseBytes) { throw 'PWB_OLLAMA_RESPONSE_LIMIT' }
-        $responseBytes = [IO.File]::ReadAllBytes($fixtureResolved)
-        $fixtureSha256 = (Get-FileHash -LiteralPath $fixtureResolved -Algorithm SHA256).Hash.ToLowerInvariant()
+        $fixtureSnapshot = Read-BoundedSnapshot -LiteralPath $FixtureResponsePath -MaximumBytes $MaxResponseBytes
+        $fixtureResolved = $fixtureSnapshot.Path
+        $responseBytes = $fixtureSnapshot.Bytes
+        $fixtureSha256 = $fixtureSnapshot.Sha256
         $httpStatusCode = 200
     } else {
         $handler = [Net.Http.HttpClientHandler]::new()
@@ -178,7 +197,7 @@ try {
     if ($null -ne $cancellation) { $cancellation.Dispose() }
 }
 Write-NewUtf8File -LiteralPath $responsePath -Bytes $responseBytes
-$responseSha256 = (Get-FileHash -LiteralPath $responsePath -Algorithm SHA256).Hash.ToLowerInvariant()
+$responseSha256 = Get-ByteSha256 -Bytes $responseBytes
 $metadata = [ordered]@{
     schemaVersion = '1.0'
     runId = $runId

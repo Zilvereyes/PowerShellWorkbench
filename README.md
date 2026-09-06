@@ -89,7 +89,7 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 
 ## Bounded direct Ollama evidence
 
-`Invoke-PowerShellWorkbenchOllamaChat.ps1` is read-only and network-free unless `-Execute` is supplied. Execution is restricted to an exact credential-free loopback HTTP `/api/chat` endpoint, disables streaming and thinking, bounds prompt/request/response bytes, timeout and output tokens, and never executes returned tool calls. `Test-PowerShellWorkbenchOllamaEvidence.ps1` separately validates the hash-bound capture. A model digest remains an unverified caller declaration unless the validator is explicitly told to accept that limitation.
+`Invoke-PowerShellWorkbenchOllamaChat.ps1` is read-only and network-free unless `-Execute` is supplied. Execution is restricted to an exact credential-free literal loopback-IP HTTP `/api/chat` endpoint, disables streaming and thinking, bounds prompt/request/response bytes, timeout and output tokens, and never executes returned tool calls. `Test-PowerShellWorkbenchOllamaEvidence.ps1` separately validates single-read byte snapshots from the hash-bound capture. A model digest remains an unverified caller declaration unless the validator is explicitly told to accept that limitation.
 
 ```powershell
 $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `

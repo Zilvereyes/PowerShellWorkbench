@@ -13,6 +13,7 @@ foreach($path in @($adapter,$validator)){
     Assert-True ($errors.Count -eq 0) "$path has parser errors."
     $commands=@($ast.FindAll({param($node)$node -is [Management.Automation.Language.CommandAst]},$true)|ForEach-Object{$_.GetCommandName()}|Where-Object{$_})
     foreach($forbidden in @('Start-Process','Invoke-Expression','Set-Clipboard','git','gh')){Assert-True ($commands -notcontains $forbidden) "$path contains forbidden command $forbidden."}
+    if($path -eq $validator){Assert-True ($commands -notcontains 'Get-FileHash' -and $commands -notcontains 'Get-Content') 'Evidence validator reintroduced separate hash and parse reads.'}
 }
 
 $tempRoot=Join-Path ([IO.Path]::GetTempPath()) ('pwb-ollama-contract-'+[guid]::NewGuid().ToString('N'))
@@ -26,7 +27,10 @@ try{
     Assert-True (-not(Test-Path -LiteralPath $neverCreated)) 'AnalyzeOnly created its output directory.'
     Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'https://127.0.0.1:11434/api/chat'} 'must use http'
     Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://127.0.0.1:11434/api/generate'} 'exact credential-free'
-    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://example.test:11434/api/chat'} 'must be loopback'
+    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://example.test:11434/api/chat'} 'literal loopback IP'
+    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://localhost:11434/api/chat'} 'literal loopback IP'
+    $ipv6=& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://[::1]:11434/api/chat'
+    Assert-True ($ipv6.result -eq 'ANALYZE_ONLY' -and -not $ipv6.networkPerformed) 'Literal IPv6 loopback preview failed.'
 
     $responseJson='{"model":"fixture-model","created_at":"2026-09-06T00:00:00Z","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_fixture","arguments":{"path":"fixture.txt"}}}]},"done":true,"total_duration":123,"prompt_eval_count":4,"eval_count":2}'
     $fixturePath=Join-Path $tempRoot 'response-fixture.json'
