@@ -47,6 +47,7 @@ Then start a new Codex task.
 - Apply RecoveryToolkit and WingetDownloader conventions when those projects are detected.
 - Run parser, PSScriptAnalyzer, Pester, MegaLinter, and Codex Security gates only when explicitly requested.
 - Package the plugin for another local marketplace, workstation, or Git-backed marketplace.
+- Preview and fixture-validate clean portable marketplace installation or reversible source/cache upgrades before touching an installed channel.
 - Diagnose PowerShell, Codex, Git, Node/npm, Docker, winget, and PATH before workstation setup.
 - Validate explicit Git/personal plugin source-cache pairs, expected versions, duplicate roots, and optional hash-bound catalog freshness without writing to the installation.
 - Preview a freshness-bounded, generator- and policy-hash-bound local-model catalog schema migration without writing, launching Codex, or inventing schema 1.1 transport evidence from a legacy manifest.
@@ -106,6 +107,8 @@ The wire schema follows Ollama's official [tool-calling contract](https://docs.o
 `Compare-PowerShellWorkbenchOllamaEvidence.ps1` reads a hash-bound comparison manifest under an explicit evidence root. It verifies each capture, requires an identical prompt and normalized request configuration, evaluates an exact UTF-8 answer hash, and reports wall time, server duration, and token counts separately. Wrong answers are never ranked merely because they are fast; missing metrics are `UNKNOWN`, while hash, path, prompt, or configuration drift is `CONFLICT`. The comparator performs no retry, model call, write, or transport.
 
 `Get-PowerShellWorkbenchStatusDashboard.ps1` reuses the health validator and binds every observed source tree to an independently hash-bound release-provenance file under an explicit root. It reports declared version, found source/cache channels, validated tree identity, commit/ref provenance, and catalog state without writing, executing, or transporting anything. Missing or malformed state is `UNKNOWN`; contradictory version, hash, root, or tree state is `CONFLICT`, with the original health gate names preserved.
+
+`New-PortablePowerShellWorkbenchMarketplace.ps1 -WhatIf` now returns an explicit `CleanInstall` or `Upgrade` preview without creating the destination. Execution stages and structurally validates both the plugin and marketplace metadata before replacing anything. A forced upgrade moves existing plugin and marketplace targets to transaction-local backups and restores them if either replacement fails. This packages a marketplace folder only; it does not invoke Codex installation or transport commands.
 
 ```powershell
 $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `
