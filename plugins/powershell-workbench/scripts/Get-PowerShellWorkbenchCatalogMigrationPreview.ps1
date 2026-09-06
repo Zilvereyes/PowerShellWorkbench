@@ -51,6 +51,13 @@ function Test-PathWithinRoot {
     $normalizedPath.StartsWith($normalizedRoot + $separator,[StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-FullyQualifiedPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not [IO.Path]::IsPathRooted($Path)) { return $false }
+    if ($Path -match '^[A-Za-z]:($|[^\\/])' -or $Path -match '^[\\/](?![\\/])') { return $false }
+    $true
+}
+
 function Test-PathChainWithoutReparsePoint {
     param([string]$Path,[string]$Root)
     $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
@@ -107,17 +114,30 @@ function Test-TransportSnapshotShape {
         @($expected | Where-Object { $names -cnotcontains $_ }).Count -eq 0
 }
 
-function Test-EffectiveTransportInvariant {
+function Test-TransportSnapshotValueTypes {
     param([object]$Snapshot)
     if (-not (Test-TransportSnapshotShape -Snapshot $Snapshot)) { return $false }
     $responsesLite = Get-PropertyValue -InputObject $Snapshot -Name 'use_responses_lite'
     $toolMode = Get-PropertyValue -InputObject $Snapshot -Name 'tool_mode'
     $multiAgentVersion = Get-PropertyValue -InputObject $Snapshot -Name 'multi_agent_version'
     $supportsSearch = Get-PropertyValue -InputObject $Snapshot -Name 'supports_search_tool'
-    ($null -eq $responsesLite -or $responsesLite -ceq $false) -and
+    ($null -eq $responsesLite -or $responsesLite -is [bool]) -and
+        ($null -eq $toolMode -or $toolMode -is [string]) -and
+        ($null -eq $multiAgentVersion -or $multiAgentVersion -is [string]) -and
+        ($null -eq $supportsSearch -or $supportsSearch -is [bool])
+}
+
+function Test-EffectiveTransportInvariant {
+    param([object]$Snapshot)
+    if (-not (Test-TransportSnapshotValueTypes -Snapshot $Snapshot)) { return $false }
+    $responsesLite = Get-PropertyValue -InputObject $Snapshot -Name 'use_responses_lite'
+    $toolMode = Get-PropertyValue -InputObject $Snapshot -Name 'tool_mode'
+    $multiAgentVersion = Get-PropertyValue -InputObject $Snapshot -Name 'multi_agent_version'
+    $supportsSearch = Get-PropertyValue -InputObject $Snapshot -Name 'supports_search_tool'
+    ($null -eq $responsesLite -or ($responsesLite -is [bool] -and -not $responsesLite)) -and
         $null -eq $toolMode -and
         $null -eq $multiAgentVersion -and
-        ($null -eq $supportsSearch -or $supportsSearch -ceq $false)
+        ($null -eq $supportsSearch -or ($supportsSearch -is [bool] -and -not $supportsSearch))
 }
 
 $manifestResolved = $null
@@ -141,11 +161,11 @@ $generatorSha256 = $null
 $sourceGeneratedAtUtc = $null
 $bundledCatalogSha256 = $null
 
-if (-not [IO.Path]::IsPathRooted($ManifestPath)) {
+if (-not (Test-FullyQualifiedPath -Path $ManifestPath)) {
     Add-FailedGate -Gate 'SourceManifestPathAbsolute' -Subject $ManifestPath -Message 'ManifestPath must be absolute.'
 } else { $manifestResolved = [IO.Path]::GetFullPath($ManifestPath) }
 
-if (-not [IO.Path]::IsPathRooted($AllowedWriteRoot)) {
+if (-not (Test-FullyQualifiedPath -Path $AllowedWriteRoot)) {
     Add-FailedGate -Gate 'AllowedWriteRootAbsolute' -Subject $AllowedWriteRoot -Message 'AllowedWriteRoot must be absolute.'
 } else {
     $allowedRootResolved = [IO.Path]::GetFullPath($AllowedWriteRoot).TrimEnd('\','/')
@@ -158,7 +178,7 @@ if (-not [IO.Path]::IsPathRooted($AllowedWriteRoot)) {
     } else { $allowedRootUsable = $true }
 }
 
-if (-not [IO.Path]::IsPathRooted($DestinationCatalogPath)) {
+if (-not (Test-FullyQualifiedPath -Path $DestinationCatalogPath)) {
     Add-FailedGate -Gate 'DestinationCatalogPathAbsolute' -Subject $DestinationCatalogPath -Message 'DestinationCatalogPath must be absolute.'
 } else {
     $destinationResolved = [IO.Path]::GetFullPath($DestinationCatalogPath)
@@ -221,7 +241,7 @@ if ($manifest) {
     }
 
     $catalogInput = [string](Get-PropertyValue -InputObject $manifest -Name 'catalogPath')
-    if ([string]::IsNullOrWhiteSpace($catalogInput) -or -not [IO.Path]::IsPathRooted($catalogInput)) {
+    if (-not (Test-FullyQualifiedPath -Path $catalogInput)) {
         Add-FailedGate -Gate 'SourceCatalogPathAbsolute' -Subject $manifestResolved -Message 'Source catalog path must be absolute.'
     } else {
         $catalogPath = [IO.Path]::GetFullPath($catalogInput)
@@ -246,7 +266,7 @@ if ($manifest) {
     }
 
     $codexInput = [string](Get-PropertyValue -InputObject $manifest -Name 'codexPath')
-    if ([string]::IsNullOrWhiteSpace($codexInput) -or -not [IO.Path]::IsPathRooted($codexInput)) {
+    if (-not (Test-FullyQualifiedPath -Path $codexInput)) {
         Add-FailedGate -Gate 'SourceCodexPathAbsolute' -Subject $manifestResolved -Message 'Source Codex path must be absolute.'
     } else {
         $codexPath = [IO.Path]::GetFullPath($codexInput)
@@ -269,7 +289,7 @@ if ($manifest) {
         $transportOverrides = if ($null -eq $transport) { @() } else { @(Get-PropertyValue -InputObject $transport -Name 'overrides') }
         $expectedOverrides = @('use_responses_lite=false when present','tool_mode removed when present','multi_agent_version removed when present','service_tier/service_tiers removed when present','supports_search_tool=false when present')
         $expectedUnasserted = @('reasoning-levels','speed-tiers','service-tier','input-modalities','responses-lite','tool-mode','multi-agent-version','search-tool')
-        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-TransportSnapshotShape -Snapshot $transportBase) -or -not (Test-EffectiveTransportInvariant -Snapshot $transportEffective) -or -not (Test-ExactStringArray -Actual $transportOverrides -Expected $expectedOverrides) -or -not (Test-ExactStringArray -Actual $unasserted -Expected $expectedUnasserted)) {
+        if ($null -eq $transport -or @($transportNames | Where-Object { @('base','effective','overrides') -cnotcontains $_ }).Count -gt 0 -or @(@('base','effective','overrides') | Where-Object { $transportNames -cnotcontains $_ }).Count -gt 0 -or -not (Test-TransportSnapshotValueTypes -Snapshot $transportBase) -or -not (Test-EffectiveTransportInvariant -Snapshot $transportEffective) -or -not (Test-ExactStringArray -Actual $transportOverrides -Expected $expectedOverrides) -or -not (Test-ExactStringArray -Actual $unasserted -Expected $expectedUnasserted)) {
             Add-FailedGate -Gate 'SourceTransportEvidence' -Subject $manifestResolved -Message 'Schema 1.1 transport evidence is incomplete.'
         }
     }

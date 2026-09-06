@@ -155,6 +155,17 @@ try {
     $transportResult = Invoke-Preview -Fixture $current -ExpectedManifestSha256 (Get-FileHash $current.ManifestPath -Algorithm SHA256).Hash
     Assert-GatesExactly -Result $transportResult -Expected @('SourceTransportEvidence') -Message 'Transport invariant gate changed.'
 
+    foreach ($falseLike in @(0,'False')) {
+        $typedTransport = Initialize-Fixture -Name ("transport-type-$falseLike") -SchemaVersion '1.1'
+        $typedManifest = Get-Content -LiteralPath $typedTransport.ManifestPath -Raw | ConvertFrom-Json
+        $typedManifest.transport.effective.use_responses_lite = $falseLike
+        $typedManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $typedTransport.ManifestPath -Encoding UTF8
+        $typedResult = Invoke-Preview -Fixture $typedTransport `
+            -ExpectedManifestSha256 (Get-FileHash $typedTransport.ManifestPath -Algorithm SHA256).Hash
+        Assert-GatesExactly -Result $typedResult -Expected @('SourceTransportEvidence') `
+            -Message "Transport type gate changed for '$falseLike'."
+    }
+
     $hashDrift = Invoke-Preview -Fixture $fixture -ExpectedManifestSha256 ('0' * 64)
     Assert-GatesExactly -Result $hashDrift -Expected @('SourceManifestHash') -Message 'Manifest drift gate changed.'
 
@@ -202,6 +213,40 @@ try {
     $outside = Join-Path $tempRoot 'outside.json'
     $outsideResult = Invoke-Preview -Fixture $boundary -DestinationCatalogPath $outside
     Assert-GatesExactly -Result $outsideResult -Expected @('DestinationPathAllowed') -Message 'Destination boundary gate changed.'
+
+    $driveRelativeManifest = [pscustomobject]@{
+        Root=$boundary.Root;ManifestPath='C:relative-manifest.json';ManifestSha256=$boundary.ManifestSha256
+        CatalogPath=$boundary.CatalogPath;CodexPath=$boundary.CodexPath
+    }
+    $driveRelativeManifestResult = Invoke-Preview -Fixture $driveRelativeManifest
+    Assert-GatesExactly -Result $driveRelativeManifestResult -Expected @('SourceManifestPathAbsolute') `
+        -Message 'Drive-relative manifest gate changed.'
+
+    $driveRelativeDestinationResult = Invoke-Preview -Fixture $boundary -DestinationCatalogPath 'C:relative-catalog.json'
+    Assert-GatesExactly -Result $driveRelativeDestinationResult -Expected @('DestinationCatalogPathAbsolute') `
+        -Message 'Drive-relative destination gate changed.'
+
+    $driveRelativeRootResult = Invoke-Preview -Fixture $boundary -AllowedWriteRoot 'C:relative-root'
+    Assert-GatesExactly -Result $driveRelativeRootResult -Expected @('AllowedWriteRootAbsolute') `
+        -Message 'Drive-relative allowed root gate changed.'
+
+    $relativeCatalog = Initialize-Fixture -Name relative-catalog
+    $relativeCatalogManifest = Get-Content -LiteralPath $relativeCatalog.ManifestPath -Raw | ConvertFrom-Json
+    $relativeCatalogManifest.catalogPath = 'C:relative-catalog.json'
+    $relativeCatalogManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $relativeCatalog.ManifestPath -Encoding UTF8
+    $relativeCatalogResult = Invoke-Preview -Fixture $relativeCatalog `
+        -ExpectedManifestSha256 (Get-FileHash $relativeCatalog.ManifestPath -Algorithm SHA256).Hash
+    Assert-GatesExactly -Result $relativeCatalogResult -Expected @('SourceCatalogPathAbsolute') `
+        -Message 'Drive-relative source catalog gate changed.'
+
+    $relativeCodex = Initialize-Fixture -Name relative-codex
+    $relativeCodexManifest = Get-Content -LiteralPath $relativeCodex.ManifestPath -Raw | ConvertFrom-Json
+    $relativeCodexManifest.codexPath = 'C:relative-codex.exe'
+    $relativeCodexManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $relativeCodex.ManifestPath -Encoding UTF8
+    $relativeCodexResult = Invoke-Preview -Fixture $relativeCodex `
+        -ExpectedManifestSha256 (Get-FileHash $relativeCodex.ManifestPath -Algorithm SHA256).Hash
+    Assert-GatesExactly -Result $relativeCodexResult -Expected @('SourceCodexPathAbsolute') `
+        -Message 'Drive-relative source Codex gate changed.'
 
     $reparse = Initialize-Fixture -Name reparse
     $reparseTarget = Join-Path $tempRoot 'reparse-target'
