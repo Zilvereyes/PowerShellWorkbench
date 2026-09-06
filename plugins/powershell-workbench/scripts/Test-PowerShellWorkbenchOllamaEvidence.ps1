@@ -128,7 +128,7 @@ foreach ($name in @('request','response')) {
     try { $snapshot = Read-BoundedSnapshot -LiteralPath $path -MaximumBytes $limit }
     catch { Add-Failure "Artifacts.$name.Limit"; continue }
     $actualBytes = [long]$snapshot.Bytes
-    if ($actualBytes -ne [long](Get-Value $artifacts ($name + 'Bytes') -1)) { Add-Failure "Artifacts.$name.Bytes" }
+    if ($actualBytes -ne [long](Get-Value -Object $artifacts -Name ($name + 'Bytes') -Default -1)) { Add-Failure "Artifacts.$name.Bytes" }
     if ($snapshot.Sha256 -ne ([string](Get-Value $artifacts ($name + 'Sha256'))).ToLowerInvariant()) { Add-Failure "Artifacts.$name.Sha256" }
     $artifactSnapshots[$name] = $snapshot
     if ($name -eq 'request') { $requestPath = $path } else { $responsePath = $path }
@@ -137,16 +137,16 @@ if ($requestPath) {
     if (-not(Test-JsonNesting -Text $artifactSnapshots['request'].Text)) { Add-Failure 'Request.JsonNesting'; $request = $null }
     else { try { $request = $artifactSnapshots['request'].Text | ConvertFrom-Json } catch { Add-Failure 'Request.Json'; $request = $null } }
     if ($request) {
-        Test-Allowlist $request @('model','messages','stream','think','keep_alive','options') 'Request.Properties'
+        Test-Allowlist -Object $request -Allowed @('model','messages','stream','think','keep_alive','options') -Gate 'Request.Properties'
         if ([string](Get-Value $request 'model') -cne $ExpectedModelId) { Add-Failure 'Request.ModelId' }
         if (-not(Test-ExactBoolean (Get-Value $request 'stream') $false)) { Add-Failure 'Request.Stream' }
         if (-not(Test-ExactBoolean (Get-Value $request 'think') $false)) { Add-Failure 'Request.Think' }
         if ([string](Get-Value $request 'keep_alive') -notmatch '^(0|[1-9][0-9]*[smh])$') { Add-Failure 'Request.KeepAlive' }
-        $messages = @(Get-Value $request 'messages' @())
+        $messages = @(Get-Value -Object $request -Name 'messages' -Default @())
         if ($messages.Count -ne 1 -or [string](Get-Value $messages[0] 'role') -cne 'user' -or [string]::IsNullOrWhiteSpace([string](Get-Value $messages[0] 'content'))) { Add-Failure 'Request.Messages' }
-        else { Test-Allowlist $messages[0] @('role','content') 'Request.MessageProperties' }
+        else { Test-Allowlist -Object $messages[0] -Allowed @('role','content') -Gate 'Request.MessageProperties' }
         $options = Get-Value $request 'options'
-        Test-Allowlist $options @('temperature','num_predict','seed') 'Request.OptionsProperties'
+        Test-Allowlist -Object $options -Allowed @('temperature','num_predict','seed') -Gate 'Request.OptionsProperties'
         $numPredict = Get-Value $options 'num_predict'
         if(-not(Test-IntegerValue $numPredict) -or [int64]$numPredict -lt 1 -or [int64]$numPredict -gt 1048576){Add-Failure 'Request.MaxOutputTokens'}
         if ($null -ne (Get-Value $request 'tools')) { Add-Failure 'Request.Tools' }

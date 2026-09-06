@@ -5,7 +5,7 @@ $validator = Join-Path $root 'scripts\Test-PowerShellWorkbenchOllamaEvidence.ps1
 $digest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 function Assert-True { param([bool]$Condition,[string]$Message) if(-not $Condition){throw $Message} }
-function Assert-Throws { param([scriptblock]$Action,[string]$Pattern) try{& $Action;throw 'Expected failure was not raised.'}catch{if($_.Exception.Message -notmatch $Pattern){throw "Unexpected failure: $($_.Exception.Message)"}} }
+function Assert-Throw { param([scriptblock]$Action,[string]$Pattern) try{& $Action;throw 'Expected failure was not raised.'}catch{if($_.Exception.Message -notmatch $Pattern){throw "Unexpected failure: $($_.Exception.Message)"}} }
 
 foreach($path in @($adapter,$validator)){
     $tokens=$null;$errors=$null
@@ -25,10 +25,10 @@ try{
     Assert-True ($first.result -eq 'ANALYZE_ONLY' -and -not $first.networkPerformed -and -not $first.writePerformed -and -not $first.toolExecutionPerformed) 'AnalyzeOnly performed an effect.'
     Assert-True ($first.requestSha256 -eq $second.requestSha256) 'AnalyzeOnly request identity was not deterministic.'
     Assert-True (-not(Test-Path -LiteralPath $neverCreated)) 'AnalyzeOnly created its output directory.'
-    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'https://127.0.0.1:11434/api/chat'} 'must use http'
-    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://127.0.0.1:11434/api/generate'} 'exact credential-free'
-    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://example.test:11434/api/chat'} 'literal loopback IP'
-    Assert-Throws {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://localhost:11434/api/chat'} 'literal loopback IP'
+    Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'https://127.0.0.1:11434/api/chat'} 'must use http'
+    Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://127.0.0.1:11434/api/generate'} 'exact credential-free'
+    Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://example.test:11434/api/chat'} 'literal loopback IP'
+    Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://localhost:11434/api/chat'} 'literal loopback IP'
     $ipv6=& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://[::1]:11434/api/chat'
     Assert-True ($ipv6.result -eq 'ANALYZE_ONLY' -and -not $ipv6.networkPerformed) 'Literal IPv6 loopback preview failed.'
 
