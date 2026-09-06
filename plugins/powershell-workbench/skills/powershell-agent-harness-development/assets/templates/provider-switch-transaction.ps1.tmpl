@@ -18,6 +18,17 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Apply')]
     [Parameter(Mandatory, ParameterSetName = 'Resume')]
     [ValidateNotNullOrEmpty()][string[]]$OwnedKeys,
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [Parameter(Mandatory, ParameterSetName = 'Resume')][string]$Endpoint,
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [Parameter(Mandatory, ParameterSetName = 'Resume')][string]$WireApi,
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [Parameter(Mandatory, ParameterSetName = 'Resume')][string]$CatalogPath,
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [Parameter(Mandatory, ParameterSetName = 'Resume')]
+    [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$CatalogSha256,
+    [Parameter(Mandatory, ParameterSetName = 'Apply')]
+    [Parameter(Mandatory, ParameterSetName = 'Resume')][string]$ManagedStatePath,
     [Parameter(Mandatory, ParameterSetName = 'Apply')][scriptblock]$GetOwnedState,
     [Parameter(ParameterSetName = 'Resume')]
     [ValidateRange(1, [int]::MaxValue)][int]$MaximumJournalAgeMinutes = 1440,
@@ -27,7 +38,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
-$knownPhases = @('Prepared', 'ProviderCommitted', 'PostCheckPending', 'Ready', 'RestorePending', 'Restored', 'FailedRestored')
+$knownPhases = @('Prepared', 'ProviderCommitted', 'ProviderProfileWritten', 'DesktopLifecycleInterrupted', 'PostCheckPending', 'Ready', 'RestorePending', 'Restored', 'FailedRestored')
 
 function Get-Sha256Text {
     param([Parameter(Mandatory)][string]$Text)
@@ -47,6 +58,16 @@ function Get-UtcDateTime {
 function Get-RoundtripUtcText {
     param([Parameter(Mandatory)][object]$Value)
     (Get-UtcDateTime -Value $Value).ToString('o',[Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Test-LoopbackEndpoint {
+    param([Parameter(Mandatory)][string]$Value)
+    try { $uri = [uri]$Value } catch { return $false }
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -notin @('http','https')) { return $false }
+    if ($uri.Host -eq 'localhost') { return $true }
+    $address = $null
+    if (-not [Net.IPAddress]::TryParse($uri.Host, [ref]$address)) { return $false }
+    [Net.IPAddress]::IsLoopback($address)
 }
 
 function Get-CanonicalOwnedState {
@@ -87,15 +108,31 @@ function Set-TransactionPhase {
 function Test-PhaseHistory {
     param([Parameter(Mandatory)][object]$Journal)
     $previousHash = $null
+    $previousPhase = $null
+    $allowedTransitions = @{
+        Prepared=@('ProviderCommitted','ProviderProfileWritten','RestorePending')
+        ProviderCommitted=@('PostCheckPending','RestorePending')
+        ProviderProfileWritten=@('DesktopLifecycleInterrupted','PostCheckPending','RestorePending')
+        DesktopLifecycleInterrupted=@('PostCheckPending','RestorePending')
+        PostCheckPending=@('Ready','RestorePending')
+        Ready=@('RestorePending')
+        RestorePending=@('Restored','FailedRestored')
+        Restored=@()
+        FailedRestored=@()
+    }
     foreach ($entry in @($Journal.phaseHistory)) {
         foreach ($name in @('phase','recordedAt','configSha256','detail','previousEntrySha256','entrySha256')) {
             if ($null -eq $entry.PSObject.Properties[$name]) { return $false }
         }
         if ($knownPhases -notcontains [string]$entry.phase) { return $false }
+        if ($null -eq $previousPhase) {
+            if ([string]$entry.phase -ne 'Prepared') { return $false }
+        } elseif ($allowedTransitions[$previousPhase] -notcontains [string]$entry.phase) { return $false }
         if ([string]$entry.previousEntrySha256 -ne [string]$previousHash) { return $false }
         $hashInput = [ordered]@{phase=[string]$entry.phase;recordedAt=Get-RoundtripUtcText $entry.recordedAt;configSha256=[string]$entry.configSha256;detail=[string]$entry.detail;previousEntrySha256=$previousHash}
         if ((Get-Sha256Text -Text ($hashInput | ConvertTo-Json -Depth 8 -Compress)) -ne [string]$entry.entrySha256) { return $false }
         $previousHash = [string]$entry.entrySha256
+        $previousPhase = [string]$entry.phase
     }
     (@($Journal.phaseHistory).Count -gt 0 -and [string]$Journal.phaseHistory[-1].phase -eq [string]$Journal.phase)
 }
@@ -105,6 +142,10 @@ function New-ResumeResult {
     [pscustomobject][ordered]@{
         schemaVersion='1.0';decision=$Decision;eligible=$Eligible;applyRequired=$ApplyRequired
         postCheckRequired=$PostCheckRequired
+        ProviderSwitchRequired=$ApplyRequired
+        ManagedCommitRequired=($Decision -eq 'ManagedCommitRequired')
+        ResumedAfterProviderProfileWrite=($Decision -eq 'ManagedCommitRequired')
+        DesktopLifecycleInvoked=$false
         phase=if($null -ne $script:resumeTransaction){[string]$script:resumeTransaction.phase}else{$null}
         failedGates=@($FailedGates)
     }
@@ -120,17 +161,36 @@ if ($PSCmdlet.ParameterSetName -eq 'Resume') {
     $transaction = $script:resumeTransaction
     $failedGates = New-Object System.Collections.Generic.List[string]
     if ($OwnedKeys.Count -ne (@($OwnedKeys | Select-Object -Unique)).Count) { $failedGates.Add('ExpectedOwnedKeysUnique') }
-    foreach ($name in @('schemaVersion','phase','configPath','providerId','modelId','effectiveContext','ownedKeys','phaseHistory','updatedAt','backupPath','beforeSha256','afterSha256','ownedStateSha256')) {
+    foreach ($name in @('schemaVersion','phase','configPath','providerId','modelId','effectiveContext','ownedKeys','endpoint','wireApi','catalogPath','catalogSha256','managedStatePath','providerProfileState','providerProfileStateSha256','phaseHistory','updatedAt','backupPath','beforeSha256','afterSha256','ownedStateSha256')) {
         if ($null -eq $transaction.PSObject.Properties[$name]) { $failedGates.Add("TransactionField.$name") }
     }
     if ($failedGates.Count) { return New-ResumeResult -Decision 'Blocked' -Eligible $false -ApplyRequired $false -PostCheckRequired $false -FailedGates $failedGates.ToArray() }
-    if ([string]$transaction.schemaVersion -ne '2.0') { $failedGates.Add('TransactionSchemaVersion') }
+    if ([string]$transaction.schemaVersion -ne '3.0') { $failedGates.Add('TransactionSchemaVersion') }
     if ($knownPhases -notcontains [string]$transaction.phase) { $failedGates.Add('TransactionPhaseKnown') }
     if ([string]$transaction.configPath -ne $resolvedConfig) { $failedGates.Add('TransactionConfigPath') }
     if ([string]$transaction.providerId -ne $ProviderId) { $failedGates.Add('TransactionProviderIdentity') }
     if ([string]$transaction.modelId -ne $ModelId) { $failedGates.Add('TransactionModelIdentity') }
     if ([int]$transaction.effectiveContext -ne $EffectiveContext) { $failedGates.Add('TransactionEffectiveContext') }
     if ((@($transaction.ownedKeys) -join "`n") -ne (@($OwnedKeys) -join "`n")) { $failedGates.Add('TransactionOwnedKeys') }
+    if (-not (Test-LoopbackEndpoint -Value $Endpoint)) { $failedGates.Add('ExpectedEndpointLoopback') }
+    if ([string]$transaction.endpoint -ne $Endpoint) { $failedGates.Add('TransactionEndpointIdentity') }
+    if ([string]::IsNullOrWhiteSpace($WireApi) -or [string]$transaction.wireApi -ne $WireApi) { $failedGates.Add('TransactionWireApiIdentity') }
+    $resolvedExpectedCatalog = $null
+    try { $resolvedExpectedCatalog = (Resolve-Path -LiteralPath $CatalogPath).Path } catch { $failedGates.Add('ExpectedCatalogPresent') }
+    if ($resolvedExpectedCatalog -and [string]$transaction.catalogPath -ne $resolvedExpectedCatalog) { $failedGates.Add('TransactionCatalogPath') }
+    if ($resolvedExpectedCatalog -and (Get-FileHash -LiteralPath $resolvedExpectedCatalog -Algorithm SHA256).Hash.ToLowerInvariant() -ne $CatalogSha256.ToLowerInvariant()) { $failedGates.Add('ExpectedCatalogHash') }
+    if ([string]$transaction.catalogSha256 -ne $CatalogSha256.ToLowerInvariant()) { $failedGates.Add('TransactionCatalogHash') }
+    $resolvedExpectedManagedState = $null
+    try {
+        if (-not [IO.Path]::IsPathRooted($ManagedStatePath)) { $failedGates.Add('ExpectedManagedStatePathAbsolute') }
+        else { $resolvedExpectedManagedState = [IO.Path]::GetFullPath($ManagedStatePath) }
+    } catch { $failedGates.Add('ExpectedManagedStatePathValid') }
+    if ($resolvedExpectedManagedState -and [string]$transaction.managedStatePath -ne $resolvedExpectedManagedState) { $failedGates.Add('TransactionManagedStatePath') }
+    try {
+        $recordedProviderProfileState = Get-CanonicalOwnedState -State $transaction.providerProfileState
+        $recordedProviderProfileHash = Get-Sha256Text -Text ($recordedProviderProfileState | ConvertTo-Json -Depth 8 -Compress)
+        if ($recordedProviderProfileHash -ne [string]$transaction.providerProfileStateSha256) { $failedGates.Add('ProviderProfileStateHash') }
+    } catch { $failedGates.Add('ProviderProfileStateIdentity') }
     if (-not (Test-PhaseHistory -Journal $transaction)) { $failedGates.Add('TransactionPhaseHistory') }
     try { $updatedAt = Get-UtcDateTime $transaction.updatedAt }
     catch { $updatedAt = [datetime]::MinValue }
@@ -144,12 +204,19 @@ if ($PSCmdlet.ParameterSetName -eq 'Resume') {
             if ($currentHash -ne [string]$transaction.beforeSha256) { return New-ResumeResult -Decision 'Blocked' -Eligible $false -ApplyRequired $false -PostCheckRequired $false -FailedGates @('ConfigHashMatchesPreparedPhase') }
             return New-ResumeResult -Decision 'ApplyRequired' -Eligible $true -ApplyRequired $true -PostCheckRequired $false -FailedGates @()
         }
-        { $_ -in @('ProviderCommitted','PostCheckPending','Ready','RestorePending') } {
+        { $_ -in @('ProviderCommitted','ProviderProfileWritten','DesktopLifecycleInterrupted','PostCheckPending','Ready','RestorePending') } {
             if ($currentHash -ne [string]$transaction.afterSha256) { return New-ResumeResult -Decision 'Blocked' -Eligible $false -ApplyRequired $false -PostCheckRequired $false -FailedGates @('ConfigHashMatchesCommittedPhase') }
             if ($_ -eq 'RestorePending') { return New-ResumeResult -Decision 'RestoreRequired' -Eligible $true -ApplyRequired $false -PostCheckRequired $false -FailedGates @() }
             if ($_ -eq 'Ready') {
                 if ([string]$transaction.ownedStateSha256 -notmatch '^[a-f0-9]{64}$') { return New-ResumeResult -Decision 'Blocked' -Eligible $false -ApplyRequired $false -PostCheckRequired $false -FailedGates @('OwnedStateHash') }
                 return New-ResumeResult -Decision 'AlreadyReady' -Eligible $true -ApplyRequired $false -PostCheckRequired $false -FailedGates @()
+            }
+            if ($_ -in @('ProviderProfileWritten','DesktopLifecycleInterrupted')) {
+                $phaseGates = New-Object System.Collections.Generic.List[string]
+                if ([string]$transaction.providerProfileStateSha256 -notmatch '^[a-f0-9]{64}$') { $phaseGates.Add('ProviderProfileStateHash') }
+                if (Test-Path -LiteralPath $resolvedExpectedManagedState) { $phaseGates.Add('ManagedStateAbsentForPendingCommit') }
+                if ($phaseGates.Count) { return New-ResumeResult -Decision 'Blocked' -Eligible $false -ApplyRequired $false -PostCheckRequired $false -FailedGates $phaseGates.ToArray() }
+                return New-ResumeResult -Decision 'ManagedCommitRequired' -Eligible $true -ApplyRequired $false -PostCheckRequired $false -FailedGates @()
             }
             return New-ResumeResult -Decision 'PostCheckRequired' -Eligible $true -ApplyRequired $false -PostCheckRequired $true -FailedGates @()
         }
@@ -164,7 +231,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Resume') {
 if ($PSCmdlet.ParameterSetName -eq 'Restore') {
     $resolvedTransactionPath = (Resolve-Path -LiteralPath $TransactionPath).Path
     $transaction = Get-Content -LiteralPath $resolvedTransactionPath -Raw | ConvertFrom-Json
-    if ([string]$transaction.schemaVersion -ne '2.0') { throw 'Unsupported transaction schema version.' }
+    if ([string]$transaction.schemaVersion -ne '3.0') { throw 'Unsupported transaction schema version.' }
     if (-not (Test-PhaseHistory -Journal $transaction)) { throw 'Transaction phase history is invalid.' }
     if ($transaction.configPath -ne $resolvedConfig) { throw 'Transaction config path does not match -ConfigPath.' }
     if (-not (Test-Path -LiteralPath $transaction.backupPath -PathType Leaf)) { throw 'Recorded backup is missing.' }
@@ -185,6 +252,13 @@ if ($PSCmdlet.ParameterSetName -eq 'Restore') {
 }
 
 if ($OwnedKeys.Count -ne (@($OwnedKeys | Select-Object -Unique)).Count) { throw 'OwnedKeys contains duplicates.' }
+if (-not (Test-LoopbackEndpoint -Value $Endpoint)) { throw 'Endpoint must be an absolute HTTP(S) loopback URI.' }
+if ([string]::IsNullOrWhiteSpace($WireApi)) { throw 'WireApi must not be empty.' }
+if (-not [IO.Path]::IsPathRooted($ManagedStatePath)) { throw 'ManagedStatePath must be absolute.' }
+$resolvedCatalog = (Resolve-Path -LiteralPath $CatalogPath).Path
+$normalizedCatalogSha256 = $CatalogSha256.ToLowerInvariant()
+if ((Get-FileHash -LiteralPath $resolvedCatalog -Algorithm SHA256).Hash.ToLowerInvariant() -ne $normalizedCatalogSha256) { throw 'Catalog hash verification failed before mutation.' }
+$resolvedManagedState = [IO.Path]::GetFullPath($ManagedStatePath)
 $transactionId = '{0}-{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')),([guid]::NewGuid().ToString('N'))
 $backupPath = Join-Path $BackupDirectory "$transactionId.config.backup"
 $journalPath = Join-Path $BackupDirectory "$transactionId.transaction.json"
@@ -194,15 +268,20 @@ New-Item -ItemType Directory -Path $BackupDirectory -Force | Out-Null
 Copy-Item -LiteralPath $resolvedConfig -Destination $backupPath
 if ((Get-FileHash -LiteralPath $backupPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $beforeHash) { throw 'Provider backup hash verification failed before mutation.' }
 $transaction = [pscustomobject][ordered]@{
-    schemaVersion='2.0';transactionId=$transactionId;phase=$null;configPath=$resolvedConfig;backupPath=$backupPath
+    schemaVersion='3.0';transactionId=$transactionId;phase=$null;configPath=$resolvedConfig;backupPath=$backupPath
     beforeSha256=$beforeHash;afterSha256=$null;providerId=$ProviderId;modelId=$ModelId;effectiveContext=$EffectiveContext
-    ownedKeys=@($OwnedKeys);ownedStateSha256=$null;createdAt=[DateTime]::UtcNow.ToString('o');updatedAt=$null;phaseHistory=@();failure=$null
+    ownedKeys=@($OwnedKeys);endpoint=$Endpoint;wireApi=$WireApi;catalogPath=$resolvedCatalog;catalogSha256=$normalizedCatalogSha256
+    managedStatePath=$resolvedManagedState;providerProfileState=$null;providerProfileStateSha256=$null;ownedStateSha256=$null
+    createdAt=[DateTime]::UtcNow.ToString('o');updatedAt=$null;phaseHistory=@();failure=$null
 }
 Set-TransactionPhase -Journal $transaction -Phase 'Prepared' -Path $journalPath -ConfigSha256 $beforeHash -Detail 'Backup created and verified before mutation.'
 try {
     & $ApplyScopedEdit $resolvedConfig
     $transaction.afterSha256 = (Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-TransactionPhase -Journal $transaction -Phase 'ProviderCommitted' -Path $journalPath -ConfigSha256 $transaction.afterSha256 -Detail 'Scoped provider edit committed.'
+    $providerProfileState = Get-CanonicalOwnedState -State (& $GetOwnedState $resolvedConfig $OwnedKeys)
+    $transaction.providerProfileState = [pscustomobject]$providerProfileState
+    $transaction.providerProfileStateSha256 = Get-Sha256Text -Text ($providerProfileState | ConvertTo-Json -Depth 8 -Compress)
+    Set-TransactionPhase -Journal $transaction -Phase 'ProviderProfileWritten' -Path $journalPath -ConfigSha256 $transaction.afterSha256 -Detail 'Scoped provider profile written and owned state hash recorded.'
     Set-TransactionPhase -Journal $transaction -Phase 'PostCheckPending' -Path $journalPath -ConfigSha256 $transaction.afterSha256 -Detail 'Provider post-check pending.'
     $postCheckResult = & $PostCheck $resolvedConfig
     if ($postCheckResult -isnot [bool] -or -not $postCheckResult) { throw 'Provider post-check must return Boolean true.' }
