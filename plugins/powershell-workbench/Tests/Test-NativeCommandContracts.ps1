@@ -17,10 +17,10 @@ try{
     $accepted=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo accepted-nonzero & exit /b 7') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'accepted-nonzero' -SuccessExitCodes @(0,7)
     if(-not $accepted.Succeeded -or $accepted.ExitCode -ne 7 -or $accepted.VerificationState -ne 'NotRun'){throw 'Accepted exit-code contract failed.'}
 
-    $verificationFailure=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo verification-failure') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'verification-failure' -VerificationScope ArtifactIntegrity -Verify {param($result)$false} -NoThrow
+    $verificationFailure=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo verification-failure') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'verification-failure' -VerificationScope ArtifactIntegrity -Verify {$false} -NoThrow
     if(-not $verificationFailure.Succeeded -or $verificationFailure.Verified -or $verificationFailure.VerificationState -ne 'Failed' -or $verificationFailure.ExecutionError){throw 'Verification failure was not kept separate from execution success.'}
 
-    $verificationError=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo verification-error') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'verification-error' -VerificationScope InstalledState -Verify {param($result)throw 'synthetic post-check error'} -NoThrow
+    $verificationError=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo verification-error') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'verification-error' -VerificationScope InstalledState -Verify {throw 'synthetic post-check error'} -NoThrow
     if(-not $verificationError.Succeeded -or $verificationError.ExecutionError -or $verificationError.VerificationState -ne 'Failed' -or $verificationError.VerificationError -ne 'synthetic post-check error'){throw 'Verification exception was not isolated from execution evidence.'}
 
     $executionFailure=& $runner -FilePath $env:ComSpec -ArgumentList @('/d','/c','echo native-error 1>&2 & exit /b 9') -WorkingDirectory $tempRoot -ReportDirectory $tempRoot -StepId 'execution-failure' -NoThrow
