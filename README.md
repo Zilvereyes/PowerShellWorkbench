@@ -94,7 +94,12 @@ The validator, fixtures, contract tests, and provider-switch transaction templat
 
 `Test-PowerShellWorkbenchOllamaEvidence.ps1` separately validates single-read byte snapshots from the hash-bound capture. A model digest remains an unverified caller declaration unless the validator is explicitly told to accept that limitation.
 
-`-EnableReadFileSliceProposal` adds one fixed Ollama function schema to the request. It does not execute the returned call. `New-PowerShellWorkbenchReadOnlyToolProposal.ps1` converts a validated response into a deterministic proposal; `New-PowerShellWorkbenchReadOnlyToolApproval.ps1` previews unless `-Approve` is explicit; and `Invoke-PowerShellWorkbenchReadOnlyTool.ps1` previews unless `-Execute` is explicit. Proposal, approval, target and observation are independently hash-bound, output writes require a separate scoped evidence root, and no stage performs transport. The wire schema follows Ollama's official [tool-calling contract](https://docs.ollama.com/capabilities/tool-calling).
+`-EnableReadFileSliceProposal` adds one fixed Ollama function schema to the request. It does not execute the returned call.
+`New-PowerShellWorkbenchReadOnlyToolProposal.ps1` converts a validated response into a deterministic proposal;
+`New-PowerShellWorkbenchReadOnlyToolApproval.ps1` previews unless `-Approve` is explicit; and
+`Invoke-PowerShellWorkbenchReadOnlyTool.ps1` previews unless `-Execute` is explicit. Proposal, approval, target and observation
+are independently hash-bound, output writes require a separate scoped evidence root, and no stage performs transport.
+The wire schema follows Ollama's official [tool-calling contract](https://docs.ollama.com/capabilities/tool-calling).
 
 ```powershell
 $preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `

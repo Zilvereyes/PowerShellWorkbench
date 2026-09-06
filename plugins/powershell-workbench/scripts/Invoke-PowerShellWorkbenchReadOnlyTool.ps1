@@ -35,7 +35,7 @@ function Read-Snapshot {
     [pscustomobject]@{Path=$resolved;Bytes=$bytes;Length=$bytes.Length;Sha256=$hash}
 }
 function Get-Value { param($Object,[string]$Name) $Object.PSObject.Properties[$Name].Value }
-function Write-NewBytes { param([string]$LiteralPath,[byte[]]$Bytes) $stream=[IO.File]::Open($LiteralPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read);try{$stream.Write($Bytes,0,$Bytes.Length)}finally{$stream.Dispose()} }
+function Write-NewByteFile { param([string]$LiteralPath,[byte[]]$Bytes) $stream=[IO.File]::Open($LiteralPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read);try{$stream.Write($Bytes,0,$Bytes.Length)}finally{$stream.Dispose()} }
 function Get-TextSha256 { param([string]$Text) $algorithm=[Security.Cryptography.SHA256]::Create();try{$bytes=[Text.UTF8Encoding]::new($false).GetBytes($Text);([BitConverter]::ToString($algorithm.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$algorithm.Dispose()} }
 function Test-FullyQualifiedPath { param([string]$Path) if([string]::IsNullOrWhiteSpace($Path)-or -not[IO.Path]::IsPathRooted($Path)){return $false};if($Path -match '^[A-Za-z]:(?:$|[^\\/])' -or $Path -match '^[\\/](?![\\/])'){return $false};$true }
 function Test-PathChain { param([string]$Path,[string]$Root) $rootPath=[IO.Path]::GetFullPath($Root).TrimEnd('\','/');$current=[IO.Path]::GetFullPath($Path);while($current){if(Test-Path -LiteralPath $current){if((Get-Item -LiteralPath $current).Attributes -band [IO.FileAttributes]::ReparsePoint){return $false}};if($current -ieq $rootPath){return $true};$parent=Split-Path -Parent $current;if(-not $parent -or $parent -ieq $current){break};$current=$parent.TrimEnd('\','/')};$false }
@@ -83,8 +83,8 @@ $observationId=Get-TextSha256 -Text ($proposalSnapshot.Sha256+'|'+$approvalSnaps
 $outputResolved=(Resolve-Path -LiteralPath $OutputDirectory).Path
 $slicePath=Join-Path $outputResolved "$observationId.slice.bin";$observationPath=Join-Path $outputResolved "$observationId.observation.json"
 if(-not(Test-PathChain -Path $slicePath -Root $evidenceRoot)){throw 'Read-only tool output path changed after preflight.'}
-Write-NewBytes -LiteralPath $slicePath -Bytes $sliceBytes
+Write-NewByteFile -LiteralPath $slicePath -Bytes $sliceBytes
 $observation=[ordered]@{schemaVersion='1.0';observationId=$observationId;createdAt=$createdAt;state='SUCCEEDED';proposalSha256=$proposalSnapshot.Sha256;approvalSha256=$approvalSnapshot.Sha256;target=[ordered]@{path=$targetSnapshot.Path;sha256=$targetSnapshot.Sha256;bytes=$targetSnapshot.Length};slice=[ordered]@{path=$slicePath;offsetBytes=$offset;bytes=$sliceBytes.Length;sha256=$sliceSha256};effects=[ordered]@{toolExecutionPerformed=$true;targetWritePerformed=$false;networkPerformed=$false;processPerformed=$false;transportPerformed=$false}}
 $utf8=New-Object Text.UTF8Encoding($false);$observationBytes=$utf8.GetBytes(($observation|ConvertTo-Json -Depth 8))
-try{Write-NewBytes -LiteralPath $observationPath -Bytes $observationBytes}catch{if(Test-Path -LiteralPath $slicePath){Remove-Item -LiteralPath $slicePath -Force};throw}
+try{Write-NewByteFile -LiteralPath $observationPath -Bytes $observationBytes}catch{if(Test-Path -LiteralPath $slicePath){Remove-Item -LiteralPath $slicePath -Force};throw}
 [pscustomobject][ordered]@{SchemaVersion='1.0';State='SUCCEEDED';Eligible=$true;FailedGates=@();ProposalSha256=$proposalSnapshot.Sha256;ApprovalSha256=$approvalSnapshot.Sha256;ObservationPath=$observationPath;ObservationSha256=(Get-TextSha256 -Text ($utf8.GetString($observationBytes)));SlicePath=$slicePath;SliceSha256=$sliceSha256;ExecutionPerformed=$true;TargetWritePerformed=$false;NetworkPerformed=$false;ProcessPerformed=$false;TransportPerformed=$false}

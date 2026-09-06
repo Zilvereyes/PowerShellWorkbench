@@ -12,7 +12,7 @@ function Assert-True { param([bool]$Condition,[string]$Message) if(-not $Conditi
 function Assert-GatesExactly { param($Result,[string[]]$Expected,[string]$Message) $actual=@($Result.FailedGates);if(($actual -join '|') -cne ($Expected -join '|')){throw "$Message Expected [$($Expected -join ', ')], got [$($actual -join ', ')]."} }
 function Get-Sha256 { param([string]$LiteralPath) (Get-FileHash -LiteralPath $LiteralPath -Algorithm SHA256).Hash.ToLowerInvariant() }
 function Write-Json { param([string]$LiteralPath,$Value) [IO.File]::WriteAllText($LiteralPath,($Value|ConvertTo-Json -Depth 10),$utf8) }
-function New-Proposal {
+function Write-ProposalFixture {
     param([string]$LiteralPath,[string]$TargetPath,[string]$CreatedAt,[int64]$OffsetBytes,[int64]$MaximumBytes)
     if(-not $PSBoundParameters.ContainsKey('CreatedAt')){$CreatedAt='2026-09-06T12:00:00Z'}
     if(-not $PSBoundParameters.ContainsKey('OffsetBytes')){$OffsetBytes=2}
@@ -21,7 +21,7 @@ function New-Proposal {
     Write-Json -LiteralPath $LiteralPath -Value $value
     Get-Sha256 -LiteralPath $LiteralPath
 }
-function New-Approval {
+function Write-ApprovalFixture {
     param([string]$LiteralPath,[string]$ProposalSha256,[string]$AllowedRoot,[string]$TargetPath,[string]$CreatedAt,[string]$ExpiresAt)
     if(-not $PSBoundParameters.ContainsKey('CreatedAt')){$CreatedAt='2026-09-06T12:01:00Z'}
     if(-not $PSBoundParameters.ContainsKey('ExpiresAt')){$ExpiresAt='2026-09-06T12:15:00Z'}
@@ -94,36 +94,36 @@ try{
     $wrongHash=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 ('d'*64) -ApprovalPath $approvalPath -ApprovalSha256 $approvalSha -AllowedRoot $allowedRoot
     Assert-True ($wrongHash.State -eq 'CONFLICT') 'Proposal hash drift was not CONFLICT.';Assert-GatesExactly -Result $wrongHash -Expected @('ProposalSha256') -Message 'Proposal hash gate changed.'
 
-    $staleProposalPath=Join-Path $tempRoot 'stale-proposal.json';$staleProposalSha=New-Proposal -LiteralPath $staleProposalPath -TargetPath $targetPath -CreatedAt '2026-09-06T10:00:00Z'
-    $staleApprovalPath=Join-Path $tempRoot 'stale-approval.json';$staleApprovalSha=New-Approval -LiteralPath $staleApprovalPath -ProposalSha256 $staleProposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath
+    $staleProposalPath=Join-Path $tempRoot 'stale-proposal.json';$staleProposalSha=Write-ProposalFixture -LiteralPath $staleProposalPath -TargetPath $targetPath -CreatedAt '2026-09-06T10:00:00Z'
+    $staleApprovalPath=Join-Path $tempRoot 'stale-approval.json';$staleApprovalSha=Write-ApprovalFixture -LiteralPath $staleApprovalPath -ProposalSha256 $staleProposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath
     $stale=Resolve-Chain -ProposalPath $staleProposalPath -ProposalSha256 $staleProposalSha -ApprovalPath $staleApprovalPath -ApprovalSha256 $staleApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($stale.State -eq 'UNKNOWN') 'Stale proposal was not UNKNOWN.';Assert-GatesExactly -Result $stale -Expected @('ProposalFreshness') -Message 'Stale proposal gate changed.'
 
-    $expiredApprovalPath=Join-Path $tempRoot 'expired-approval.json';$expiredApprovalSha=New-Approval -LiteralPath $expiredApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -ExpiresAt '2026-09-06T12:04:00Z'
+    $expiredApprovalPath=Join-Path $tempRoot 'expired-approval.json';$expiredApprovalSha=Write-ApprovalFixture -LiteralPath $expiredApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -ExpiresAt '2026-09-06T12:04:00Z'
     $expired=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $expiredApprovalPath -ApprovalSha256 $expiredApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($expired.State -eq 'UNKNOWN') 'Expired approval was not UNKNOWN.';Assert-GatesExactly -Result $expired -Expected @('ApprovalFreshness') -Message 'Expired approval gate changed.'
 
-    $futureApprovalPath=Join-Path $tempRoot 'future-approval.json';$futureApprovalSha=New-Approval -LiteralPath $futureApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T12:10:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
+    $futureApprovalPath=Join-Path $tempRoot 'future-approval.json';$futureApprovalSha=Write-ApprovalFixture -LiteralPath $futureApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T12:10:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
     $futureApproval=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $futureApprovalPath -ApprovalSha256 $futureApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($futureApproval.State -eq 'UNKNOWN') 'Future approval was not UNKNOWN.';Assert-GatesExactly -Result $futureApproval -Expected @('ApprovalFreshness') -Message 'Future approval gate changed.'
 
-    $preProposalApprovalPath=Join-Path $tempRoot 'pre-proposal-approval.json';$preProposalApprovalSha=New-Approval -LiteralPath $preProposalApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T11:59:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
+    $preProposalApprovalPath=Join-Path $tempRoot 'pre-proposal-approval.json';$preProposalApprovalSha=Write-ApprovalFixture -LiteralPath $preProposalApprovalPath -ProposalSha256 $proposalSha -AllowedRoot $allowedRoot -TargetPath $targetPath -CreatedAt '2026-09-06T11:59:00Z' -ExpiresAt '2026-09-06T12:15:00Z'
     $preProposalApproval=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $preProposalApprovalPath -ApprovalSha256 $preProposalApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($preProposalApproval.State -eq 'UNKNOWN') 'Approval before proposal was not UNKNOWN.';Assert-GatesExactly -Result $preProposalApproval -Expected @('ApprovalFreshness') -Message 'Pre-proposal approval gate changed.'
 
     $outsidePath=Join-Path $tempRoot 'outside.txt';[IO.File]::WriteAllText($outsidePath,'outside',$utf8)
-    $outsideProposalPath=Join-Path $tempRoot 'outside-proposal.json';$outsideProposalSha=New-Proposal -LiteralPath $outsideProposalPath -TargetPath $outsidePath
-    $outsideApprovalPath=Join-Path $tempRoot 'outside-approval.json';$outsideApprovalSha=New-Approval -LiteralPath $outsideApprovalPath -ProposalSha256 $outsideProposalSha -AllowedRoot $allowedRoot -TargetPath $outsidePath
+    $outsideProposalPath=Join-Path $tempRoot 'outside-proposal.json';$outsideProposalSha=Write-ProposalFixture -LiteralPath $outsideProposalPath -TargetPath $outsidePath
+    $outsideApprovalPath=Join-Path $tempRoot 'outside-approval.json';$outsideApprovalSha=Write-ApprovalFixture -LiteralPath $outsideApprovalPath -ProposalSha256 $outsideProposalSha -AllowedRoot $allowedRoot -TargetPath $outsidePath
     $outside=Resolve-Chain -ProposalPath $outsideProposalPath -ProposalSha256 $outsideProposalSha -ApprovalPath $outsideApprovalPath -ApprovalSha256 $outsideApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($outside.State -eq 'CONFLICT') 'Root escape was not CONFLICT.';Assert-GatesExactly -Result $outside -Expected @('TargetWithinRoot') -Message 'Root escape gate changed.'
 
-    $bindingApprovalPath=Join-Path $tempRoot 'binding-approval.json';$bindingApprovalSha=New-Approval -LiteralPath $bindingApprovalPath -ProposalSha256 ('e'*64) -AllowedRoot $allowedRoot -TargetPath $targetPath
+    $bindingApprovalPath=Join-Path $tempRoot 'binding-approval.json';$bindingApprovalSha=Write-ApprovalFixture -LiteralPath $bindingApprovalPath -ProposalSha256 ('e'*64) -AllowedRoot $allowedRoot -TargetPath $targetPath
     $binding=Resolve-Chain -ProposalPath $proposalPath -ProposalSha256 $proposalSha -ApprovalPath $bindingApprovalPath -ApprovalSha256 $bindingApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($binding.State -eq 'CONFLICT') 'Approval binding mismatch was not CONFLICT.';Assert-GatesExactly -Result $binding -Expected @('ApprovalProposalBinding') -Message 'Approval binding gate changed.'
 
     $driftTargetPath=Join-Path $allowedRoot 'drift.txt';[IO.File]::WriteAllText($driftTargetPath,'before',$utf8)
-    $driftProposalPath=Join-Path $tempRoot 'drift-proposal.json';$driftProposalSha=New-Proposal -LiteralPath $driftProposalPath -TargetPath $driftTargetPath
-    $driftApprovalPath=Join-Path $tempRoot 'drift-approval.json';$driftApprovalSha=New-Approval -LiteralPath $driftApprovalPath -ProposalSha256 $driftProposalSha -AllowedRoot $allowedRoot -TargetPath $driftTargetPath
+    $driftProposalPath=Join-Path $tempRoot 'drift-proposal.json';$driftProposalSha=Write-ProposalFixture -LiteralPath $driftProposalPath -TargetPath $driftTargetPath
+    $driftApprovalPath=Join-Path $tempRoot 'drift-approval.json';$driftApprovalSha=Write-ApprovalFixture -LiteralPath $driftApprovalPath -ProposalSha256 $driftProposalSha -AllowedRoot $allowedRoot -TargetPath $driftTargetPath
     [IO.File]::WriteAllText($driftTargetPath,'after',$utf8)
     $drift=Resolve-Chain -ProposalPath $driftProposalPath -ProposalSha256 $driftProposalSha -ApprovalPath $driftApprovalPath -ApprovalSha256 $driftApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($drift.State -eq 'CONFLICT') 'Target drift was not CONFLICT.';Assert-GatesExactly -Result $drift -Expected @('TargetEvidence') -Message 'Target drift gate changed.'
@@ -131,8 +131,8 @@ try{
     $reparseTarget=Join-Path $tempRoot 'reparse-target';New-Item -ItemType Directory -Path $reparseTarget | Out-Null
     $reparseFile=Join-Path $reparseTarget 'linked.txt';[IO.File]::WriteAllText($reparseFile,'linked',$utf8)
     $reparseLink=Join-Path $allowedRoot 'linked';New-Item -ItemType Junction -Path $reparseLink -Target $reparseTarget | Out-Null
-    $linkedPath=Join-Path $reparseLink 'linked.txt';$reparseProposalPath=Join-Path $tempRoot 'reparse-proposal.json';$reparseProposalSha=New-Proposal -LiteralPath $reparseProposalPath -TargetPath $linkedPath
-    $reparseApprovalPath=Join-Path $tempRoot 'reparse-approval.json';$reparseApprovalSha=New-Approval -LiteralPath $reparseApprovalPath -ProposalSha256 $reparseProposalSha -AllowedRoot $allowedRoot -TargetPath $linkedPath
+    $linkedPath=Join-Path $reparseLink 'linked.txt';$reparseProposalPath=Join-Path $tempRoot 'reparse-proposal.json';$reparseProposalSha=Write-ProposalFixture -LiteralPath $reparseProposalPath -TargetPath $linkedPath
+    $reparseApprovalPath=Join-Path $tempRoot 'reparse-approval.json';$reparseApprovalSha=Write-ApprovalFixture -LiteralPath $reparseApprovalPath -ProposalSha256 $reparseProposalSha -AllowedRoot $allowedRoot -TargetPath $linkedPath
     $reparse=Resolve-Chain -ProposalPath $reparseProposalPath -ProposalSha256 $reparseProposalSha -ApprovalPath $reparseApprovalPath -ApprovalSha256 $reparseApprovalSha -AllowedRoot $allowedRoot
     Assert-True ($reparse.State -eq 'CONFLICT') 'Reparse target was not CONFLICT.';Assert-GatesExactly -Result $reparse -Expected @('TargetReparseSafe') -Message 'Reparse target gate changed.'
 
