@@ -52,6 +52,7 @@ Then start a new Codex task.
 - Preview a freshness-bounded, generator- and policy-hash-bound local-model catalog schema migration without writing, launching Codex, or inventing schema 1.1 transport evidence from a legacy manifest.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
+- Prepare or explicitly invoke one byte- and time-bounded loopback Ollama `/api/chat` request, preserve hash-bound raw request/response evidence, and record tool calls without executing them.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
 - Recognize an interruption after a hash-verified provider profile write, bind resume evidence to loopback endpoint, wire API, local-model catalog and canonical owned state, and return `ManagedCommitRequired` with `DesktopLifecycleInvoked=False` instead of switching the provider again.
 - Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
@@ -85,6 +86,21 @@ $capture = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchCodexJson.ps1' `
 
 The runner requires PowerShell 7 for reliable argument handling, asynchronous cancellation, and process-tree termination.
 The validator, fixtures, contract tests, and provider-switch transaction template support Windows PowerShell 5.1 and PowerShell 7.
+
+## Bounded direct Ollama evidence
+
+`Invoke-PowerShellWorkbenchOllamaChat.ps1` is read-only and network-free unless `-Execute` is supplied. Execution is restricted to an exact credential-free literal loopback-IP HTTP `/api/chat` endpoint. It disables streaming and thinking, bounds prompt/request/response bytes, timeout and output tokens, and never executes returned tool calls.
+
+`Test-PowerShellWorkbenchOllamaEvidence.ps1` separately validates single-read byte snapshots from the hash-bound capture. A model digest remains an unverified caller declaration unless the validator is explicitly told to accept that limitation.
+
+```powershell
+$preview = & '<plugin-root>\scripts\Invoke-PowerShellWorkbenchOllamaChat.ps1' `
+    -Prompt 'Explain this script.' `
+    -ModelId 'model-name' `
+    -ModelDigest '<independently-recorded-model-digest>'
+
+# Add -Execute only after reviewing the preview and intended local model call.
+```
 
 ## Useful diagnostics
 

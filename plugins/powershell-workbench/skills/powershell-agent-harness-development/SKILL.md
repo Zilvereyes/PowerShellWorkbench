@@ -25,6 +25,10 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
   invent reasoning levels, speed tiers, modalities, or online-only tool claims.
 - Use `../../scripts/Invoke-PowerShellWorkbenchCodexJson.ps1` to capture a bounded `codex exec --json` run. It requires PowerShell 7 because reliable argument passing, asynchronous waits, cancellation, and process-tree termination use modern .NET APIs. Supply `-CatalogManifestPath` when the run relies on a generated local model catalog.
 - Use `../../scripts/Test-PowerShellWorkbenchCodexEvidence.ps1` separately to validate the capture. A process exit code of zero and a plausible final message are insufficient when any tool, policy, approval, schema, or turn event failed.
+- Use `../../scripts/Invoke-PowerShellWorkbenchOllamaChat.ps1` to prepare a deterministic direct Ollama chat request.
+  It remains `ANALYZE_ONLY` unless `-Execute` is explicit, permits only the credential-free literal loopback-IP HTTP `/api/chat` endpoint,
+  disables streaming and thinking, and bounds prompt, request, response, timeout, and output tokens. Returned tool calls are evidence only and are never executed.
+- Use `../../scripts/Test-PowerShellWorkbenchOllamaEvidence.ps1` with an independently recorded metadata SHA-256. The response can attest the observed model id but not the model digest; accepting the caller-bound digest requires explicit `-AcceptUnverifiedModelDigest` and must not be reported as runtime attestation.
 - Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` before relying on installed plugin or catalog evidence. Supply explicit distribution source/cache pairs and catalog manifests; require catalog evidence when a downstream run depends on it. Unknown versions, duplicate roots, tree drift, stale manifests, missing artifacts, and hash drift fail closed without changing the installation.
 - Use `../../scripts/Get-PowerShellWorkbenchCatalogMigrationPreview.ps1` to assess a schema 1.0 catalog before migration.
   Supply the expected manifest hash, an explicit destination, a scoped allowed write root, and an authoritative reference
