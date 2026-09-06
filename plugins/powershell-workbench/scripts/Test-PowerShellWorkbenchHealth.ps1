@@ -103,7 +103,11 @@ foreach ($entry in @($Distribution)) {
         $cachePath = [IO.Path]::GetFullPath($cacheInput)
         if (-not $cachePaths.Add($cachePath)) { Add-FailedGate -Gate 'DistributionCachePathUnique' -Subject $subject -Message 'CachePath is duplicated.' }
     }
-    if ($sourcePath -and $cachePath -and $sourcePath -ieq $cachePath) { Add-FailedGate -Gate 'DistributionSourceCacheDistinct' -Subject $subject -Message 'SourcePath and CachePath must be distinct.' }
+    if ($sourcePath -and $cachePath -and $sourcePath -ieq $cachePath) {
+        Add-FailedGate -Gate 'DistributionSourceCacheDistinct' -Subject $subject -Message 'SourcePath and CachePath must be distinct.'
+    } elseif (($sourcePath -and $cachePaths.Contains($sourcePath)) -or ($cachePath -and $sourcePaths.Contains($cachePath))) {
+        Add-FailedGate -Gate 'DistributionRootUnique' -Subject $subject -Message 'A plugin root cannot be reused across source and cache roles.'
+    }
 
     $sourceVersion = $null
     $cacheVersion = $null

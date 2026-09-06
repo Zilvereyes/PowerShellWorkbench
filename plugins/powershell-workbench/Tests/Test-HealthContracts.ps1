@@ -22,6 +22,10 @@ try{
     $duplicates=&$validator -Distribution @($distribution,$distribution) -ExpectedVersion '0.7.4' -NoThrow
     Assert-GatesExactly -Result $duplicates -Expected @('DistributionNameUnique','DistributionSourcePathUnique','DistributionCachePathUnique') -Message 'Duplicate distribution gates changed.'
 
+    $crossRoleSource=Copy-Fixture $source cross-role-source
+    $crossRole=&$validator -Distribution @($distribution,[pscustomobject]@{Name='cross-role';SourcePath=$crossRoleSource;CachePath=$source}) -ExpectedVersion '0.7.4' -NoThrow
+    Assert-GatesExactly -Result $crossRole -Expected @('DistributionRootUnique') -Message 'Cross-role duplicate root gate changed.'
+
     Set-Content -LiteralPath (Join-Path $cache 'scripts\fixture.ps1') -Value "'drifted'" -Encoding UTF8
     $drift=&$validator -Distribution $distribution -ExpectedVersion '0.7.4' -NoThrow
     Assert-GatesExactly -Result $drift -Expected @('DistributionTreeIdentity') -Message 'Tree drift gate changed.'
