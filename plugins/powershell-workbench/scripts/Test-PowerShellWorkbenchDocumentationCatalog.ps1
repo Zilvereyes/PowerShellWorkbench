@@ -20,7 +20,7 @@ function Add-FailedGate {
     if (-not $failedGates.Contains($Gate)) { $failedGates.Add($Gate) }
     $diagnostics.Add([pscustomobject][ordered]@{ Gate=$Gate; Subject=$Subject; Message=$Message })
 }
-function Test-AllowedProperties {
+function Test-AllowedProperty {
     param([object]$Value,[string[]]$Allowed,[string[]]$Required,[string]$Gate,[string]$Subject)
     foreach ($property in $Value.PSObject.Properties) {
         if ($Allowed -notcontains $property.Name) {
@@ -61,7 +61,7 @@ if (-not [IO.Path]::IsPathRooted($CatalogPath)) {
 }
 
 if ($null -ne $catalog) {
-    Test-AllowedProperties -Value $catalog -Allowed @('schemaVersion','catalogId','verifiedAtUtc','domains') -Required @('schemaVersion','catalogId','verifiedAtUtc','domains') -Gate 'CatalogShape' -Subject $resolvedPath
+    Test-AllowedProperty -Value $catalog -Allowed @('schemaVersion','catalogId','verifiedAtUtc','domains') -Required @('schemaVersion','catalogId','verifiedAtUtc','domains') -Gate 'CatalogShape' -Subject $resolvedPath
     $schemaVersion = Get-PropertyValue -Value $catalog -Name 'schemaVersion'
     $catalogId = Get-PropertyValue -Value $catalog -Name 'catalogId'
     $verifiedAtText = Get-PropertyValue -Value $catalog -Name 'verifiedAtUtc'
@@ -84,7 +84,7 @@ if ($null -ne $catalog) {
     foreach ($domain in $domains) {
         if ($null -eq $domain) { Add-FailedGate -Gate 'DomainShape' -Subject $resolvedPath -Message 'Domain entries cannot be null.'; continue }
         $domainSubject = [string](Get-PropertyValue -Value $domain -Name 'id')
-        Test-AllowedProperties -Value $domain -Allowed @('id','skill','allowedHosts','sources') -Required @('id','skill','allowedHosts','sources') -Gate 'DomainShape' -Subject $domainSubject
+        Test-AllowedProperty -Value $domain -Allowed @('id','skill','allowedHosts','sources') -Required @('id','skill','allowedHosts','sources') -Gate 'DomainShape' -Subject $domainSubject
         if ([string]::IsNullOrWhiteSpace($domainSubject) -or -not $domainIds.Add($domainSubject)) { Add-FailedGate -Gate 'DomainIdUnique' -Subject $domainSubject -Message 'Domain ids must be nonempty and unique.' }
         if ($requiredDomains -notcontains $domainSubject) { Add-FailedGate -Gate 'DomainKnown' -Subject $domainSubject -Message 'Documentation domain is not recognized.' }
         $skill = [string](Get-PropertyValue -Value $domain -Name 'skill')
@@ -103,7 +103,7 @@ if ($null -ne $catalog) {
             $sourcePurpose = [string](Get-PropertyValue -Value $source -Name 'purpose')
             $sourceVersionScope = [string](Get-PropertyValue -Value $source -Name 'versionScope')
             $sourceSubject = "$domainSubject/$sourceId"
-            Test-AllowedProperties -Value $source -Allowed @('id','url','purpose','versionScope') -Required @('id','url','purpose','versionScope') -Gate 'SourceShape' -Subject $sourceSubject
+            Test-AllowedProperty -Value $source -Allowed @('id','url','purpose','versionScope') -Required @('id','url','purpose','versionScope') -Gate 'SourceShape' -Subject $sourceSubject
             if ([string]::IsNullOrWhiteSpace($sourceId) -or -not $sourceIds.Add($sourceId)) { Add-FailedGate -Gate 'SourceIdUnique' -Subject $sourceSubject -Message 'Source ids must be nonempty and unique within a domain.' }
             if ([string]::IsNullOrWhiteSpace($sourcePurpose) -or [string]::IsNullOrWhiteSpace($sourceVersionScope)) { Add-FailedGate -Gate 'SourceDescription' -Subject $sourceSubject -Message 'Every source needs purpose and version scope.' }
             $uri = $null
