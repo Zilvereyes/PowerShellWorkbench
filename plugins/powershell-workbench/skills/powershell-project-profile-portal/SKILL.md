@@ -25,3 +25,5 @@ Preview explicit, relative-path changes before writing them:
 ```
 
 Remove `-NoWrite` only after the displayed mapping is approved. The portal changes only the selected JSON profile; it never moves files, mounts images, executes installers, clears caches, or writes recovery media.
+
+For a read-only, hash-bound readiness view, place an optional `project-assessment.json` beside the profile and open the portal with `-AssessmentPath`. Its schema is `1.0` with `source.commit`, `host.binding`, `host.sanitizationStatus`, `nextAllowedAction`, and `targets` containing `name`, `status` (`PASS`, `WAITING`, `BLOCKED`, or `NOT_RUN`) and relative evidence paths plus SHA-256 values. Missing, drifted, or malformed evidence stays failed or unknown; the portal never promotes it to PASS.

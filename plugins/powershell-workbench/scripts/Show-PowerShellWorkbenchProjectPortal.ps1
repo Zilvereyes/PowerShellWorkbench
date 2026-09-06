@@ -5,6 +5,7 @@ param(
     [hashtable]$ComponentRoot,
     [hashtable]$WorkingPath,
     [string[]]$WindowsTarget,
+    [string]$AssessmentPath,
     [switch]$NoWrite
 )
 
@@ -33,6 +34,7 @@ function Initialize-Property {
 }
 
 $newProfileScript = Join-Path $PSScriptRoot 'New-PowerShellWorkbenchProjectProfile.ps1'
+$assessmentScript = Join-Path $PSScriptRoot 'Get-PowerShellWorkbenchProjectAssessment.ps1'
 $resolvedProfilePath = [IO.Path]::GetFullPath($ProfilePath)
 
 if (-not (Test-Path -LiteralPath $resolvedProfilePath -PathType Leaf)) {
@@ -80,10 +82,14 @@ $configuredProjectRoot = [string]$config.project.root
 $portalProjectRoot = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($configuredProjectRoot)) { $configuredProjectRoot } else { Join-Path (Split-Path -Parent $resolvedProfilePath) $configuredProjectRoot }))
 $pathLines = @($config.paths.PSObject.Properties | ForEach-Object { "{0}: {1} -> {2}" -f $_.Name, $_.Value, [IO.Path]::GetFullPath((Join-Path $portalProjectRoot ([string]$_.Value))) })
 $targetLines = @($config.targets.windows | ForEach-Object { "Windows: $_" })
+$assessment=& $assessmentScript -ProfilePath $resolvedProfilePath -AssessmentPath $AssessmentPath
+$assessmentLines=@("Configured: $($assessment.IsConfigured)","Configuration valid: $($assessment.IsValid)","Readiness: $($assessment.ReadinessStatus)","Source commit: $($assessment.SourceCommit)","Host binding: $($assessment.HostBinding)","Sanitization: $($assessment.SanitizationStatus)","Next allowed action: $($assessment.NextAllowedAction)")
+$assessmentLines+=@($assessment.Targets|ForEach-Object { "Target: $($_.Name) = $($_.Status)$(if($_.FailedGates.Count){'; failed gates: '+($_.FailedGates -join ', ')}else{''})" })
 Write-PortalBlock -Title 'PROJECT PORTAL' -Lines @("Profile: $resolvedProfilePath", "Project root: $($config.project.root)", "Mode: $(if ($changed) { if ($NoWrite) { 'preview' } else { 'updated' } } else { 'read-only overview' })") -Color Cyan
 Write-PortalBlock -Title 'COMPONENT ROOTS' -Lines $(if ($componentLines.Count) { $componentLines } else { 'No component roots configured.' }) -Color Magenta
 Write-PortalBlock -Title 'WINDOWS TARGETS' -Lines $(if ($targetLines.Count) { $targetLines } else { 'No Windows targets configured.' }) -Color Yellow
 Write-PortalBlock -Title 'WORKING PATHS' -Lines $(if ($pathLines.Count) { $pathLines } else { 'No working paths configured.' }) -Color DarkCyan
+Write-PortalBlock -Title 'PROJECT ASSESSMENT' -Lines $assessmentLines -Color $(if($assessment.IsValid){[ConsoleColor]::Green}else{[ConsoleColor]::Yellow})
 
 [pscustomobject]@{
     ProfilePath = $resolvedProfilePath
@@ -91,5 +97,6 @@ Write-PortalBlock -Title 'WORKING PATHS' -Lines $(if ($pathLines.Count) { $pathL
     Components = $config.components
     WindowsTargets = @($config.targets.windows)
     Paths = $config.paths
+    Assessment = $assessment
     WasUpdated = ($changed -and -not $NoWrite)
 }
