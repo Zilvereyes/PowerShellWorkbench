@@ -15,6 +15,14 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('powershell-workbench-agent-ha
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 function Assert-True { param([bool]$Condition,[string]$Message) if(-not $Condition){throw $Message} }
+function Get-TestSha256Text {
+    param([Parameter(Mandatory)][string]$Text)
+    $algorithm=[Security.Cryptography.SHA256]::Create()
+    try{
+        $bytes=[Text.Encoding]::UTF8.GetBytes($Text)
+        ([BitConverter]::ToString($algorithm.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
+    }finally{$algorithm.Dispose()}
+}
 function Invoke-EvidenceValidation {
     param([string]$MetadataPath,[hashtable]$Parameters=@{})
     $invoke=@{MetadataPath=$MetadataPath;ExpectedMetadataSha256=(Get-FileHash -LiteralPath $MetadataPath -Algorithm SHA256).Hash;ExpectedExecutableSha256=$script:ExpectedExecutableHash;AcceptUnverifiedRuntimeDeclarations=$true;NoThrow=$true}
@@ -155,10 +163,18 @@ try {
     Set-Content -LiteralPath $providerScript -Value $templateText -Encoding UTF8
     $configPath=Join-Path $tempRoot 'provider.config'
     $backupDirectory=Join-Path $tempRoot 'provider-transactions'
+    $catalogPath=Join-Path $tempRoot 'local-model-catalog.json'
+    $managedStatePath=Join-Path $tempRoot 'managed-provider-state.json'
+    Set-Content -LiteralPath $catalogPath -Value '{"models":[{"slug":"fixture-model"}]}' -Encoding UTF8
+    $providerEvidence=@{
+        Endpoint='http://127.0.0.1:11434/';WireApi='responses';CatalogPath=$catalogPath
+        CatalogSha256=(Get-FileHash -LiteralPath $catalogPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        ManagedStatePath=$managedStatePath
+    }
     Set-Content -LiteralPath $configPath -Value '{"provider":"original","model":"cloud","context":4096}' -Encoding UTF8
     $whatIfBackupDirectory=Join-Path $tempRoot 'what-if-provider-transactions'
     & $providerScript -ConfigPath $configPath -BackupDirectory $whatIfBackupDirectory `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence `
         -ApplyScopedEdit { throw 'WhatIf invoked provider edit.' } -PostCheck { throw 'WhatIf invoked post-check.' } `
         -GetOwnedState { throw 'WhatIf invoked owned-state reader.' } -WhatIf
     Assert-True (-not (Test-Path -LiteralPath $whatIfBackupDirectory)) 'Provider -WhatIf created a backup directory.'
@@ -170,7 +186,7 @@ try {
         [pscustomobject]@{providerId=$state.provider;modelId=$state.model;effectiveContext=[int]$state.context;ownedValues=$state}
     }
     $applyResult=& $providerScript -ConfigPath $configPath -BackupDirectory $backupDirectory `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence `
         -ApplyScopedEdit { param($path) $applyInvocation.Count++;Set-Content -LiteralPath $path -Value '{"provider":"ollama","model":"fixture-model","context":131072}' -Encoding UTF8 } `
         -PostCheck { param($path) ((Get-Content -LiteralPath $path -Raw|ConvertFrom-Json).provider -eq 'ollama') } `
         -GetOwnedState $ownedStateReader -Confirm:$false
@@ -180,39 +196,109 @@ try {
     Copy-Item -LiteralPath $configPath -Destination $committedConfigPath
     $journal=(Get-ChildItem -LiteralPath $backupDirectory -Filter '*.transaction.json' -File|Select-Object -First 1).FullName
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $journal -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
     Assert-True ($resume.decision -eq 'AlreadyReady' -and -not $resume.applyRequired) 'A verified Ready transaction was not recognized read-only.'
     Assert-True ($applyInvocation.Count -eq 1) 'Resume decision repeated the provider switch.'
     $missing=& $providerScript -ConfigPath $configPath -TransactionPath (Join-Path $backupDirectory 'missing.transaction.json') -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
     Assert-True (-not $missing.eligible -and @($missing.failedGates).Count -eq 1 -and $missing.failedGates[0] -eq 'TransactionJournalPresent') 'Missing journal did not fail closed with its exact gate.'
 
     $interruptedPath=Join-Path $backupDirectory 'interrupted.transaction.json'
     $interrupted=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json
-    $interrupted.phaseHistory=@($interrupted.phaseHistory|Select-Object -First ($interrupted.phaseHistory.Count-1))
-    $interrupted.phase='PostCheckPending'
+    $interrupted.phaseHistory=@($interrupted.phaseHistory|Select-Object -First ($interrupted.phaseHistory.Count-2))
+    $interrupted.phase='ProviderProfileWritten'
     $interrupted.updatedAt=$interrupted.phaseHistory[-1].recordedAt
     $interrupted|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $interruptedPath -Encoding UTF8
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
-    Assert-True ($resume.decision -eq 'PostCheckRequired' -and -not $resume.applyRequired -and $resume.postCheckRequired) 'Interrupted-after-commit resume attempted to repeat the provider switch.'
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True ($resume.decision -eq 'ManagedCommitRequired' -and $resume.ManagedCommitRequired -and $resume.ResumedAfterProviderProfileWrite) 'Interrupted-after-profile-write resume was not classified as a managed commit.'
+    Assert-True (-not $resume.ProviderSwitchRequired -and -not $resume.DesktopLifecycleInvoked -and -not $resume.postCheckRequired) 'Interrupted resume authorized provider, Desktop, or post-check execution.'
     Assert-True ($applyInvocation.Count -eq 1) 'Interrupted resume executed the provider edit.'
+
+    $desktopInterruptedPath=Join-Path $backupDirectory 'desktop-interrupted.transaction.json'
+    $desktopInterrupted=Get-Content -LiteralPath $interruptedPath -Raw|ConvertFrom-Json
+    $previousEntryHash=[string]$desktopInterrupted.phaseHistory[-1].entrySha256
+    $desktopEntry=[ordered]@{
+        phase='DesktopLifecycleInterrupted';recordedAt=[datetime]::UtcNow.ToString('o')
+        configSha256=[string]$desktopInterrupted.afterSha256;detail='Desktop lifecycle interrupted after provider profile write.'
+        previousEntrySha256=$previousEntryHash
+    }
+    $desktopEntry['entrySha256']=Get-TestSha256Text -Text ($desktopEntry|ConvertTo-Json -Depth 8 -Compress)
+    $desktopInterrupted.phaseHistory=@($desktopInterrupted.phaseHistory)+@([pscustomobject]$desktopEntry)
+    $desktopInterrupted.phase='DesktopLifecycleInterrupted';$desktopInterrupted.updatedAt=$desktopEntry.recordedAt
+    $desktopInterrupted|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $desktopInterruptedPath -Encoding UTF8
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $desktopInterruptedPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True ($resume.decision -eq 'ManagedCommitRequired' -and $resume.ResumedAfterProviderProfileWrite -and -not $resume.DesktopLifecycleInvoked) 'Desktop lifecycle interruption was not resumed read-only after provider profile write.'
+
+    $endpointDrift=$providerEvidence.Clone();$endpointDrift.Endpoint='http://127.0.0.1:11435/'
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @endpointDrift
+    Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'TransactionEndpointIdentity') 'Endpoint drift did not preserve its exact failed gate.'
+
+    $wireDrift=$providerEvidence.Clone();$wireDrift.WireApi='chat-completions'
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @wireDrift
+    Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'TransactionWireApiIdentity') 'Wire API drift did not preserve its exact failed gate.'
+
+    Set-Content -LiteralPath $catalogPath -Value '{"models":[{"slug":"drifted"}]}' -Encoding UTF8
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'ExpectedCatalogHash') 'Catalog drift did not preserve its exact failed gate.'
+    Set-Content -LiteralPath $catalogPath -Value '{"models":[{"slug":"fixture-model"}]}' -Encoding UTF8
+
+    Set-Content -LiteralPath $managedStatePath -Value '{"provider":"unexpected"}' -Encoding UTF8
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'ManagedStateAbsentForPendingCommit') 'Unexpected managed state did not preserve its exact failed gate.'
+    Remove-Item -LiteralPath $managedStatePath -Force
+
+    $missingProfileHashPath=Join-Path $backupDirectory 'missing-profile-hash.transaction.json'
+    $missingProfileHash=Get-Content -LiteralPath $interruptedPath -Raw|ConvertFrom-Json
+    $missingProfileHash.providerProfileStateSha256=$null
+    $missingProfileHash|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $missingProfileHashPath -Encoding UTF8
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $missingProfileHashPath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'ProviderProfileStateHash') 'Missing provider profile state hash did not preserve its exact failed gate.'
+    Assert-True ($applyInvocation.Count -eq 1) 'Negative resume decisions executed the provider edit.'
+
+    $invalidManagedEvidence=$providerEvidence.Clone();$invalidManagedEvidence.ManagedStatePath=('C:\invalid'+[char]0+'path')
+    $resume=$null
+    try {
+        $resume=& $providerScript -ConfigPath $configPath -TransactionPath $interruptedPath -ResumeDecision `
+            -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @invalidManagedEvidence
+    } catch {
+        throw "Invalid managed-state path escaped the structured fail-closed decision with an exception: $($_.Exception.Message)"
+    }
+    Assert-True ($null -ne $resume -and -not $resume.eligible -and $resume.failedGates -contains 'ExpectedManagedStatePathValid') 'Invalid managed-state path escaped the structured fail-closed decision.'
+
+    $invalidSequencePath=Join-Path $backupDirectory 'invalid-sequence.transaction.json'
+    $invalidSequence=Get-Content -LiteralPath $interruptedPath -Raw|ConvertFrom-Json
+    $invalidEntry=$invalidSequence.phaseHistory[-1]
+    $invalidEntry.previousEntrySha256=$null
+    $invalidHashInput=[ordered]@{phase=[string]$invalidEntry.phase;recordedAt=([datetime]$invalidEntry.recordedAt).ToUniversalTime().ToString('o');configSha256=[string]$invalidEntry.configSha256;detail=[string]$invalidEntry.detail;previousEntrySha256=$null}
+    $invalidEntry.entrySha256=Get-TestSha256Text -Text ($invalidHashInput|ConvertTo-Json -Depth 8 -Compress)
+    $invalidSequence.phaseHistory=@($invalidEntry)
+    $invalidSequence|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $invalidSequencePath -Encoding UTF8
+    $resume=& $providerScript -ConfigPath $configPath -TransactionPath $invalidSequencePath -ResumeDecision `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
+    Assert-True (-not $resume.eligible -and $resume.failedGates -contains 'TransactionPhaseHistory') 'Illegal phase sequence passed the hash-chain-only history check.'
 
     $unknownPath=Join-Path $backupDirectory 'unknown.transaction.json'
     $unknown=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json;$unknown.phase='UnknownPhase'
     $unknown|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $unknownPath -Encoding UTF8
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $unknownPath -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
     Assert-True (-not $resume.eligible -and $resume.failedGates -contains 'TransactionPhaseKnown') 'Unknown transaction phase did not fail closed with its exact gate.'
 
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $journal -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence `
         -EvaluationTimeUtc ([datetime]::UtcNow.AddDays(2))
     Assert-True (-not $resume.eligible -and $resume.failedGates -contains 'TransactionJournalFresh') 'Stale transaction journal did not fail closed with its exact gate.'
 
     Set-Content -LiteralPath $configPath -Value '{"provider":"drifted","model":"fixture-model","context":131072}' -Encoding UTF8
     $resume=& $providerScript -ConfigPath $configPath -TransactionPath $journal -ResumeDecision `
-        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context')
+        -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence
     Assert-True (-not $resume.eligible -and @($resume.failedGates).Count -eq 1 -and $resume.failedGates[0] -eq 'ConfigHashMatchesCommittedPhase') 'Config drift did not preserve the exact failed-gate name.'
     $restoreDriftRejected=$false
     try { & $providerScript -ConfigPath $configPath -TransactionPath $journal -Restore -Confirm:$false }
@@ -225,7 +311,7 @@ try {
     $nonBooleanRejected=$false
     try {
         & $providerScript -ConfigPath $configPath -BackupDirectory (Join-Path $tempRoot 'nonboolean-transactions') `
-            -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') `
+            -ProviderId 'ollama' -ModelId 'fixture-model' -EffectiveContext 131072 -OwnedKeys @('provider','model','context') @providerEvidence `
             -ApplyScopedEdit { param($path) Set-Content -LiteralPath $path -Value '{"provider":"ollama","model":"fixture-model","context":131072}' -Encoding UTF8 } `
             -PostCheck { param($path) [void]$path; 'true' } -GetOwnedState $ownedStateReader -Confirm:$false|Out-Null
     } catch { $nonBooleanRejected=$true }

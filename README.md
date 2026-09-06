@@ -51,6 +51,7 @@ Then start a new Codex task.
 - Inventory several explicitly scoped projects or a project-profile registry with bounded discovery.
 - Build safe PowerShell orchestration for local models, agent CLIs, capability registries, evaluations, checkpoints, and provider switching.
 - Resume phase-journaled provider transactions without repeating a verified switch, evaluate named runtime/certification gate groups, and generate deterministic local-only JSON/Markdown handoffs.
+- Recognize an interruption after a hash-verified provider profile write, bind resume evidence to loopback endpoint, wire API, local-model catalog and canonical owned state, and return `ManagedCommitRequired` with `DesktopLifecycleInvoked=False` instead of switching the provider again.
 - Route PowerShell-centered Lua/WoW addon, game-data, VS Code extension, Node, .NET, native, and web tooling without collapsing native contracts.
 
 ## Bounded Codex JSONL evidence
