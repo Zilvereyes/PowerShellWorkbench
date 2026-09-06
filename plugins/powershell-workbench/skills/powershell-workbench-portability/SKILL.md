@@ -20,4 +20,4 @@ Use this skill when the user wants to reuse, move, share, install, or update Pow
 
 When moving to another machine, optionally create `%USERPROFILE%\.config\powershell-workbench\projects.json` for projects that cannot be found by walking up from the active workspace.
 
-For a movable project configuration, create `.powershell-workbench/project-profile.json` with `../../scripts/New-PowerShellWorkbenchProjectProfile.ps1`. Keep project and component roots relative to that file; use `Resolve-PowerShellWorkbenchProjectProfile.ps1` to resolve and validate them before work. A future portal should edit this versioned profile rather than embedding paths in scripts.
+For a movable project configuration, create `.powershell-workbench/project-profile.json` with `../../scripts/New-PowerShellWorkbenchProjectProfile.ps1`. Keep project and component roots relative to that file; use `Resolve-PowerShellWorkbenchProjectProfile.ps1` to resolve and validate them before work. Use the existing `Show-PowerShellWorkbenchProjectPortal.ps1` portal to preview or explicitly update this versioned profile rather than embedding paths in scripts.

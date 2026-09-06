@@ -18,6 +18,9 @@ try{
     $after=Get-Content -LiteralPath $profilePath -Raw
     if($preview.WasUpdated -or $before -ne $after -or $preview.Components.Count -ne 1){throw 'NoWrite portal preview modified or failed to map the profile.'}
     $missingPath=Join-Path $tempRoot '.powershell-workbench\missing-project-profile.json'
-    $missingPreview=& $portal -ProfilePath $missingPath -NoWrite
-    if($missingPreview.WasUpdated -or $missingPreview.ProfilePath -ne $missingPath -or (Test-Path -LiteralPath $missingPath -PathType Leaf)){throw 'Missing-profile NoWrite preview behaved unexpectedly.'}
+    $missingPreview=& $portal -ProfilePath $missingPath -ProjectRoot $tempRoot -ComponentRoot @{addon='src'} -NoWrite
+    if($missingPreview.WasUpdated -or $missingPreview.ProfilePath -ne $missingPath -or (Test-Path -LiteralPath $missingPath -PathType Leaf) -or @($missingPreview.Components | Where-Object { $_.id -eq 'main' }).Count -ne 1 -or @($missingPreview.Components | Where-Object { $_.id -eq 'addon' }).Count -ne 1 -or $missingPreview.ProjectRoot -ne $tempRoot){throw 'Missing-profile NoWrite preview lost generated components or used the wrong project name/root.'}
+    $updated=& $portal -ProfilePath $profilePath -WorkingPath @{reports='Output'}
+    $updatedBytes=[IO.File]::ReadAllBytes($profilePath)
+    if(-not $updated.WasUpdated -or ($updatedBytes.Length -ge 3 -and $updatedBytes[0] -eq 0xEF -and $updatedBytes[1] -eq 0xBB -and $updatedBytes[2] -eq 0xBF)){throw 'Portal write did not report its update or was not deterministic UTF-8 without BOM.'}
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}

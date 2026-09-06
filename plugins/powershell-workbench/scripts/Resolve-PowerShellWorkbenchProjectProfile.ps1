@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$ProfilePath,
     [switch]$AllowAbsoluteRoots,
     [switch]$AllowExternalComponentRoots,
+    [switch]$AllowExternalPaths,
     [switch]$AsJson
 )
 
@@ -20,12 +21,26 @@ function Resolve-ProfileRoot {
 }
 $projectRoot=Resolve-ProfileRoot -Value ([string]$profileDocument.project.root) -Label 'Project'
 $projectPrefix=$projectRoot.TrimEnd([char[]]'\\/')+[IO.Path]::DirectorySeparatorChar
+function Test-WithinProjectRoot {
+    param([string]$Path)
+    $Path.Equals($projectRoot,[StringComparison]::OrdinalIgnoreCase) -or $Path.StartsWith($projectPrefix,[StringComparison]::OrdinalIgnoreCase)
+}
 $components=foreach($component in @($profileDocument.components)){
     $componentRoot=Resolve-ProfileRoot -Value ([string]$component.root) -Label "Component '$($component.id)'"
-    if(-not $AllowExternalComponentRoots -and -not($componentRoot.Equals($projectRoot,[StringComparison]::OrdinalIgnoreCase) -or $componentRoot.StartsWith($projectPrefix,[StringComparison]::OrdinalIgnoreCase))){throw "Component '$($component.id)' resolves outside the project root. Use -AllowExternalComponentRoots only when explicitly required."}
+    if(-not $AllowExternalComponentRoots -and -not(Test-WithinProjectRoot -Path $componentRoot)){throw "Component '$($component.id)' resolves outside the project root. Use -AllowExternalComponentRoots only when explicitly required."}
     [pscustomobject]@{Id=[string]$component.id;Role=[string]$component.role;ConfiguredRoot=[string]$component.root;ResolvedRoot=$componentRoot;Exists=(Test-Path -LiteralPath $componentRoot -PathType Container)}
 }
 $paths=[ordered]@{}
-foreach($property in @($profileDocument.paths.PSObject.Properties)){if([IO.Path]::IsPathRooted([string]$property.Value) -and -not $AllowAbsoluteRoots){throw "Configured path '$($property.Name)' must be relative."};$paths[$property.Name]=[IO.Path]::GetFullPath((Join-Path $projectRoot ([string]$property.Value)))}
-$result=[pscustomobject]@{SchemaVersion='1.0';ProfilePath=$profilePathResolved;ProjectName=[string]$profileDocument.project.name;ProjectRoot=$projectRoot;ProjectRootExists=(Test-Path -LiteralPath $projectRoot -PathType Container);Components=@($components);WindowsTargets=@($profileDocument.targets.windows);Paths=[pscustomobject]$paths}
+$pathDetails=[ordered]@{}
+foreach($property in @($profileDocument.paths.PSObject.Properties)){
+    $configuredPath=[string]$property.Value
+    if([string]::IsNullOrWhiteSpace($configuredPath)){throw "Configured path '$($property.Name)' is missing."}
+    if([IO.Path]::IsPathRooted($configuredPath) -and -not $AllowAbsoluteRoots){throw "Configured path '$($property.Name)' must be relative."}
+    $resolvedPath=[IO.Path]::GetFullPath($(if([IO.Path]::IsPathRooted($configuredPath)){$configuredPath}else{Join-Path $projectRoot $configuredPath}))
+    $withinProject=Test-WithinProjectRoot -Path $resolvedPath
+    if(-not $AllowExternalPaths -and -not $withinProject){throw "Configured path '$($property.Name)' resolves outside the project root. Use -AllowExternalPaths only when explicitly required."}
+    $paths[$property.Name]=$resolvedPath
+    $pathDetails[$property.Name]=[pscustomobject]@{ConfiguredPath=$configuredPath;ResolvedPath=$resolvedPath;Exists=(Test-Path -LiteralPath $resolvedPath);WithinProject=$withinProject}
+}
+$result=[pscustomobject]@{SchemaVersion='1.0';ProfilePath=$profilePathResolved;ProjectName=[string]$profileDocument.project.name;ProjectRoot=$projectRoot;ProjectRootExists=(Test-Path -LiteralPath $projectRoot -PathType Container);Components=@($components);WindowsTargets=@($profileDocument.targets.windows);Paths=[pscustomobject]$paths;PathDetails=[pscustomobject]$pathDetails}
 if($AsJson){$result|ConvertTo-Json -Depth 10}else{$result}

@@ -8,7 +8,7 @@ Use portable paths, explicit exports, comment-based help, structured objects, an
 
 ## RecoveryToolkit
 
-Identify this profile by `RecoveryToolkit.psd1` or explicit selection. Use split public functions in domain folders, private helpers under `Private`, underscore-based `Test_<Name>.<Type>.ps1` names, explicit exports, local safe-path boundaries, contract-first behavior, and synthetic temporary data for write-oriented tests. Preserve non-executable servicing and staging contracts.
+Identify this profile by `RecoveryToolkit.psd1` or explicit selection. Use split public functions in domain folders, private helpers under `Private`, discoverable `Test-<Name>.<Type>.ps1` names, explicit exports, local safe-path boundaries, contract-first behavior, and synthetic temporary data for write-oriented tests. Preserve non-executable servicing and staging contracts.
 
 ## WingetDownloader
 
