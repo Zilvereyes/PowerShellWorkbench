@@ -31,6 +31,9 @@ try{
     $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion $expectedVersion -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Clean install tree identity failed: $($health.FailedGates-join', ')."
     $beforeExisting=Get-Snapshot -Root $destination
+    $existingPreview=&$packager -Destination $destination -WhatIf
+    Assert-True -Condition ($existingPreview.State-eq'PREVIEW'-and$existingPreview.Mode-eq'Upgrade'-and-not$existingPreview.WritePerformed) -Message 'Existing-target non-force preview contract failed.'
+    Assert-True -Condition ((Get-Snapshot -Root $destination)-ceq$beforeExisting) -Message 'Existing-target non-force preview changed the destination.'
     Assert-Throw -Action {&$packager -Destination $destination -Confirm:$false} -Pattern 'use -Force' -Message 'Existing targets did not require -Force.'
     Assert-True -Condition ((Get-Snapshot -Root $destination)-ceq$beforeExisting) -Message 'Rejected non-force upgrade changed the destination.'
     $manifestPath=Join-Path $installed.PluginPath '.codex-plugin\plugin.json'

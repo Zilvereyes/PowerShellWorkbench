@@ -26,10 +26,12 @@ if($marketplaceExists){
     $marketplaceName=[string]$existingMarketplace.name
     if($marketplaceName-notmatch'^[A-Za-z0-9][A-Za-z0-9._-]*$'){throw 'Existing marketplace name is missing or invalid.'}
 }
-if(($pluginExists-or$marketplaceExists)-and-not$Force){throw 'Portable marketplace targets already exist; use -Force for a reversible upgrade.'}
-
 $mode=if($pluginExists-or$marketplaceExists){'Upgrade'}else{'CleanInstall'}
 $plan=[pscustomobject][ordered]@{SchemaVersion='1.0';State='PREVIEW';Mode=$mode;MarketplaceName=$marketplaceName;MarketplaceRoot=$destinationRoot;PluginPath=$pluginDestination;MarketplacePath=$marketplacePath;ExistingPlugin=$pluginExists;ExistingMarketplace=$marketplaceExists;WritePerformed=$false;RestorePerformed=$false;TransportPerformed=$false}
+if(($pluginExists-or$marketplaceExists)-and-not$Force){
+    if($WhatIfPreference){return $plan}
+    throw 'Portable marketplace targets already exist; use -Force for a reversible upgrade.'
+}
 if(-not$PSCmdlet.ShouldProcess($destinationRoot,"Perform reversible portable marketplace $mode")){return $plan}
 
 $marketplace=[ordered]@{name=$marketplaceName;interface=[ordered]@{displayName='PowerShell Workbench'};plugins=@([ordered]@{name='powershell-workbench';source=[ordered]@{source='local';path='./plugins/powershell-workbench'};policy=[ordered]@{installation='AVAILABLE';authentication='ON_INSTALL'};category='Productivity'})}

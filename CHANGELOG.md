@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 - Unreleased
+
+- Add PowerShell fragment-template generation and composition for reusable function and `#region` script pieces. Fragment templates are hash-bound to their source files, default to no-write preview, fail closed on source drift, reject conflicting duplicates, and never execute or transport generated code.
+
 ## 0.8.1 - 2026-09-07
 
 - Make installed-plugin governance testing explicitly skip only when the complete repository governance context is unavailable; partial governance state still fails. Portable marketplace contracts now exercise this installed-artifact behavior.
