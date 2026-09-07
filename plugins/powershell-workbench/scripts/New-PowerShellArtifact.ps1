@@ -41,13 +41,13 @@ else {
 switch ($Profile) {
     'RecoveryToolkit' {
         $pathHint = 'Place public functions in the matching domain folder and shared helpers under Private.'
-        $testStyle = 'Test_<Name>.<Basic|Synthetic|Contract>.ps1'
+        $testStyle = 'Test-<Name>.<Basic|Synthetic|Contract>.ps1'
         $loggingGuidance = 'Return structured objects and preserve the toolkit reporting boundary.'
         $safetyGuidance = 'Keep servicing and staging contracts non-executable; require explicit authorization for elevation or writes.'
     }
     'WingetDownloader' {
         $pathHint = 'Use WD-prefixed private helpers and retain a deliberate public command surface.'
-        $testStyle = 'Test_<Name>.<Basic|Synthetic|Contract>.ps1'
+        $testStyle = 'Test-<Name>.<Basic|Synthetic|Contract>.ps1'
         $loggingGuidance = 'Preserve structured status, error records, WinGet exit codes, and SHA-256 evidence.'
         $safetyGuidance = 'Do not execute installers, delete caches, or perform online or offline servicing implicitly.'
     }
@@ -80,9 +80,9 @@ $outputName = switch ($Kind) {
     'Script' { "$Name.ps1" }
     'Module' { "$Name.psm1" }
     'Manifest' { "$Name.psd1" }
-    'PesterBasic' { if ($Profile -eq 'Generic') { "$Name.Tests.ps1" } else { "Test_$Name.Basic.ps1" } }
-    'PesterSynthetic' { if ($Profile -eq 'Generic') { "$Name.Synthetic.Tests.ps1" } else { "Test_$Name.Synthetic.ps1" } }
-    'PesterContract' { if ($Profile -eq 'Generic') { "$Name.Contract.Tests.ps1" } else { "Test_$Name.Contract.ps1" } }
+    'PesterBasic' { if ($Profile -eq 'Generic') { "$Name.Tests.ps1" } else { "Test-$Name.Basic.ps1" } }
+    'PesterSynthetic' { if ($Profile -eq 'Generic') { "$Name.Synthetic.Tests.ps1" } else { "Test-$Name.Synthetic.ps1" } }
+    'PesterContract' { if ($Profile -eq 'Generic') { "$Name.Contract.Tests.ps1" } else { "Test-$Name.Contract.ps1" } }
     'JsonContract' { "$Name.contract.json" }
     'MarkdownDecision' { "ADR-$Name.md" }
     'MarkdownHelp' { "about_$Name.md" }

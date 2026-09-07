@@ -9,6 +9,7 @@
 - Make Doctor's default runtime state explicitly `SKIPPED`; its child-PowerShell runtime probe is opt-in.
 - Add optional `num_ctx` request binding to the bounded Ollama adapter. Requested context is recorded separately from unknown effective context; no runtime observation is invented.
 - Add portable quality-plan fields to new project profiles and correct the product display name to `PowerShell Workbench`.
+- Make RecoveryToolkit and WingetDownloader scaffolded test names discoverable as `Test-*.ps1`.
 
 ## 0.8.0 - 2026-09-07
 
