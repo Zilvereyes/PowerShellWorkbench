@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.2 - Unreleased
+## 0.8.2 - 2026-09-07
 
 - Add PowerShell fragment-template generation and composition for reusable function and `#region` script pieces. Fragment templates are hash-bound to their source files, default to no-write preview, fail closed on source drift, reject conflicting duplicates, and never execute or transport generated code.
 
