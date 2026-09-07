@@ -6,6 +6,7 @@ $pluginRoot=Split-Path -Parent $PSScriptRoot
 $packager=Join-Path $pluginRoot 'scripts\New-PortablePowerShellWorkbenchMarketplace.ps1'
 $pluginValidator=Join-Path $pluginRoot 'scripts\Test-PowerShellWorkbenchPlugin.ps1'
 $healthValidator=Join-Path $pluginRoot 'scripts\Test-PowerShellWorkbenchHealth.ps1'
+$expectedVersion=[string]((Get-Content -LiteralPath (Join-Path $pluginRoot '.codex-plugin\plugin.json') -Raw|ConvertFrom-Json).version)
 $tempRoot=Join-Path ([IO.Path]::GetTempPath()) ('powershell-workbench-portability-'+[guid]::NewGuid().ToString('N'))
 function Assert-True{param([bool]$Condition,[string]$Message)if(-not$Condition){throw $Message}}
 function Assert-Throw{param([scriptblock]$Action,[string]$Pattern,[string]$Message)$caught=$null;try{&$Action}catch{$caught=$_};if(-not$caught-or$caught.Exception.Message-notmatch$Pattern){throw $Message}}
@@ -25,7 +26,7 @@ try{
     $marketplace=Get-Content -LiteralPath $installed.MarketplacePath -Raw|ConvertFrom-Json
     Assert-True -Condition ([string]$marketplace.name-ceq'powershell-workbench') -Message 'Clean install marketplace name changed.'
     Assert-True -Condition ([string]$marketplace.plugins[0].source.path-ceq'./plugins/powershell-workbench') -Message 'Marketplace source path is not portable.'
-    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion '0.7.13' -NoThrow
+    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$installed.PluginPath}) -ExpectedVersion $expectedVersion -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Clean install tree identity failed: $($health.FailedGates-join', ')."
     $beforeExisting=Get-Snapshot -Root $destination
     Assert-Throw -Action {&$packager -Destination $destination -Confirm:$false} -Pattern 'use -Force' -Message 'Existing targets did not require -Force.'
@@ -47,7 +48,7 @@ try{
     $upgradedMarketplace=Get-Content -LiteralPath $upgraded.MarketplacePath -Raw|ConvertFrom-Json
     Assert-True -Condition ([string]$upgradedMarketplace.name-ceq'personal') -Message 'Upgrade did not preserve the existing marketplace name.'
     Assert-True -Condition (-not(Test-Path -LiteralPath (Join-Path $upgraded.PluginPath 'legacy-marker.txt'))) -Message 'Upgrade retained an obsolete plugin file.'
-    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$upgraded.PluginPath}) -ExpectedVersion '0.7.13' -NoThrow
+    $health=&$healthValidator -Distribution ([pscustomobject]@{Name='fixture';SourcePath=$pluginRoot;CachePath=$upgraded.PluginPath}) -ExpectedVersion $expectedVersion -NoThrow
     Assert-True -Condition ($health.Passed) -Message "Upgrade tree identity failed: $($health.FailedGates-join', ')."
     Assert-True -Condition (@(Get-ChildItem -LiteralPath $destination -Filter '.pwb-tx-*' -Force).Count-eq 0) -Message 'Transaction residue remained after success.'
     $upgradedMarketplace.name='?';$upgradedMarketplace|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $upgraded.MarketplacePath -Encoding UTF8
