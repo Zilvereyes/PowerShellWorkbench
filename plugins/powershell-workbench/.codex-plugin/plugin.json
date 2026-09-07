@@ -15,10 +15,8 @@
     "capabilities": ["Interactive", "Write"],
     "defaultPrompt": [
       "Create a dual-compatible PowerShell function.",
-      "Safely diagnose and edit this rejected or compact PowerShell patch with minimal churn.",
-      "Run the PowerShell quality gate.",
-      "Diagnose this project with the read-only PowerShell Workbench Doctor.",
-      "Preview a hash-bound project assessment and text-integrity policy."
+      "Diagnose this project with the read-only Doctor, quality gate, and text-integrity checks.",
+      "Preview a hash-bound project assessment before writing any project profile sidecar."
     ]
   }
 }
