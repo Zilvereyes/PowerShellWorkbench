@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.1 - Unreleased
+## 0.8.1 - 2026-09-07
 
 - Make installed-plugin governance testing explicitly skip only when the complete repository governance context is unavailable; partial governance state still fails. Portable marketplace contracts now exercise this installed-artifact behavior.
 - Add optional fail-closed text policies for encoding, line endings, and mixed line endings while preserving 0.8.0's observation-only defaults.
