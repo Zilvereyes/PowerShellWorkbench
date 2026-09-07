@@ -21,6 +21,7 @@ $profileDocument=[ordered]@{
     components=@([ordered]@{id='main';root='..';role='primary'})
     targets=[ordered]@{windows=@()}
     paths=[ordered]@{reports='Reports';artifacts='artifacts';cache='cache'}
+    quality=[ordered]@{scopes=@('Scripts','Modules');excludeRoots=@('Bin','Temp','vendor');advisoryRules=@('PSAvoidUsingWriteHost');blockingRules=@('PSReviewUnusedParameter','PSPossibleIncorrectComparisonWithNull')}
     notes='Keep roots relative to this profile. External component roots require explicit resolver authorization.'
 }
 if($NoWrite){

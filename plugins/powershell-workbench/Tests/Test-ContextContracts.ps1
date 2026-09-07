@@ -21,6 +21,8 @@ try{
     $ancestorContext=& $resolver -Path $nestedRoot -AllowAncestorHeuristics
     if($ancestorContext.ProjectRoot -ne $unrelatedRoot -or $ancestorContext.Profile -ne 'WindowsServicingToolkit' -or $ancestorContext.Source -ne 'Ancestor'){throw 'Opt-in ancestor heuristics did not remain available for deliberate wider classification.'}
     if(@($context.DetectedPowerShellRuntimes | Where-Object { $_.Architecture -eq 'Unknown' }).Count -gt 0){throw 'Runtime inventory did not probe executable architecture.'}
+    $skippedRuntimeContext=& $resolver -Path $tempRoot -SkipRuntimeProbe
+    if($skippedRuntimeContext.RuntimeProbeState -ne 'SKIPPED' -or @($skippedRuntimeContext.DetectedPowerShellRuntimes).Count -ne 0){throw 'SkipRuntimeProbe did not preserve an explicit no-probe state.'}
     $collision=Join-Path $tempRoot 'collision.ps1';Set-Content -LiteralPath $collision -Value '$home = "unsafe"' -Encoding UTF8
     $result=& $guard -Path $collision -NoThrow
     if($result.Passed -or $result.Diagnostics[0].Line -ne 1 -or $result.Diagnostics[0].SuggestedReplacement -ne '$homeEntry' -or $result.Diagnostics[0].Message -ne 'Assignment to protected automatic variable ''$home''. Use ''$homeEntry'' instead.'){throw 'Automatic-variable guard did not produce the expected diagnostic.'}

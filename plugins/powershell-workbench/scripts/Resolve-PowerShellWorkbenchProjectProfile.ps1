@@ -43,4 +43,9 @@ foreach($property in @($profileDocument.paths.PSObject.Properties)){
     $pathDetails[$property.Name]=[pscustomobject]@{ConfiguredPath=$configuredPath;ResolvedPath=$resolvedPath;Exists=(Test-Path -LiteralPath $resolvedPath);WithinProject=$withinProject}
 }
 $result=[pscustomobject]@{SchemaVersion='1.0';ProfilePath=$profilePathResolved;ProjectName=[string]$profileDocument.project.name;ProjectRoot=$projectRoot;ProjectRootExists=(Test-Path -LiteralPath $projectRoot -PathType Container);Components=@($components);WindowsTargets=@($profileDocument.targets.windows);Paths=[pscustomobject]$paths;PathDetails=[pscustomobject]$pathDetails}
+$quality=$profileDocument.quality
+if($null -ne $quality){
+    foreach($relativePath in @($quality.scopes)+@($quality.excludeRoots)){if([string]::IsNullOrWhiteSpace([string]$relativePath)-or[IO.Path]::IsPathRooted([string]$relativePath)-or([string]$relativePath)-match'(^|[\\/])\.\.([\\/]|$)'){throw 'Quality scope and exclusion paths must be non-empty portable relative paths.'}}
+    Add-Member -InputObject $result -NotePropertyName Quality -NotePropertyValue ([pscustomobject][ordered]@{Scopes=@($quality.scopes);ExcludeRoots=@($quality.excludeRoots);AdvisoryRules=@($quality.advisoryRules);BlockingRules=@($quality.blockingRules)})
+}
 if($AsJson){$result|ConvertTo-Json -Depth 10}else{$result}

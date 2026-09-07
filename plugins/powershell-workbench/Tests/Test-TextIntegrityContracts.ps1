@@ -11,6 +11,7 @@ try{
     [IO.File]::WriteAllText($crlf,"function Test-Text {`r`n    'ok'`r`n}`r`n",(New-Object Text.UTF8Encoding($false)))
     [IO.File]::WriteAllText($bom,"function Get-Bom {`r`n    'ok'`r`n}`r`n",(New-Object Text.UTF8Encoding($true)))
     [IO.File]::WriteAllBytes($invalid,[byte[]](0xff,0xfe,0xfd));Set-Content -LiteralPath $ignored -Value 'ignored' -Encoding UTF8
+    [IO.File]::WriteAllText((Join-Path $tempRoot 'mixed.ps1'),"function Test-Mixed {`r`n    'one'`n}`r`n",(New-Object Text.UTF8Encoding($false)))
     $before=Get-Snapshot $tempRoot
     $lfResult=&$diagnostic -Path $lf -NoThrow
     Assert-True ($lfResult.Passed -and $lfResult.FileCount -eq 1 -and $lfResult.Files[0].Encoding -eq 'Utf8NoBom' -and $lfResult.Files[0].LineEndings.Style -eq 'LF') 'UTF-8 LF fixture was not classified correctly.'
@@ -19,12 +20,18 @@ try{
     $semantic=&$diagnostic -Path $crlf -ExpectedNormalizedTextSha256 ('0'*64) -NoThrow
     Assert-True ($semantic.Files[0].ComparisonState -eq 'SEMANTIC_DRIFT') 'Semantic drift was not reported.'
     $directory=&$diagnostic -Path $tempRoot -NoThrow
-    Assert-True (-not $directory.Passed -and $directory.FileCount -eq 4 -and @($directory.Files.Path|Where-Object {$_ -eq 'ignored.txt'}).Count -eq 0) 'Directory extension filtering or fail-closed invalid-text handling failed.'
+    Assert-True (-not $directory.Passed -and $directory.FileCount -eq 5 -and @($directory.Files.Path|Where-Object {$_ -eq 'ignored.txt'}).Count -eq 0) 'Directory extension filtering or fail-closed invalid-text handling failed.'
     Assert-True ((@($directory.Files|Where-Object {$_.Encoding -eq 'Utf8Bom'}).Count -eq 1)) 'UTF-8 BOM was not reported.'
+    $encodingPolicy=&$diagnostic -Path $tempRoot -AllowedEncoding Utf8NoBom -NoThrow
+    Assert-True (-not $encodingPolicy.Passed -and $encodingPolicy.FailedGates -contains 'EncodingPolicy') 'Encoding policy did not fail closed for UTF-8 BOM content.'
+    $lineEndingPolicy=&$diagnostic -Path $tempRoot -AllowedLineEnding LF -NoThrow
+    Assert-True (-not $lineEndingPolicy.Passed -and $lineEndingPolicy.FailedGates -contains 'LineEndingPolicy') 'Line ending policy did not fail closed for CRLF content.'
+    $mixedPolicy=&$diagnostic -Path $tempRoot -DisallowMixedLineEndings -NoThrow
+    Assert-True (-not $mixedPolicy.Passed -and $mixedPolicy.FailedGates -contains 'MixedLineEndingsPolicy') 'Mixed line endings did not fail the explicit policy gate.'
     $bad=&$diagnostic -Path $invalid -NoThrow
     Assert-True (-not $bad.Passed -and @($bad.FailedGates) -eq 'TextSnapshotReadable' -and $bad.Files[0].ComparisonState -eq 'UNKNOWN') 'Invalid UTF-8 did not fail closed.'
     $json=&$diagnostic -Path $lf -AsJson -NoThrow|ConvertFrom-Json
-    Assert-True ($json.SchemaVersion -eq '1.0' -and -not $json.WritePerformed -and -not $json.NetworkPerformed -and -not $json.TransportPerformed) 'JSON/no-execution contract failed.'
+    Assert-True ($json.SchemaVersion -eq '1.0' -and $null -ne $json.Policy -and -not $json.WritePerformed -and -not $json.NetworkPerformed -and -not $json.TransportPerformed) 'JSON/no-execution contract failed.'
     Assert-True ((Get-Snapshot $tempRoot) -ceq $before) 'Read-only text diagnostic changed a fixture.'
     'PowerShell Workbench text integrity contracts passed.'
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}

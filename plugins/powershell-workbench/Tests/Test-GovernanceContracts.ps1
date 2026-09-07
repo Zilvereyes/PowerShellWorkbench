@@ -5,7 +5,13 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 
-foreach ($requiredFile in @('LICENSE', 'SECURITY.md', 'CONTRIBUTING.md')) {
+ $requiredFiles = @('LICENSE', 'SECURITY.md', 'CONTRIBUTING.md')
+ $presentFiles = @($requiredFiles | Where-Object { Test-Path -LiteralPath (Join-Path $repositoryRoot $_) -PathType Leaf })
+if ($presentFiles.Count -eq 0) {
+    'PowerShell Workbench governance contracts skipped: repository governance context is unavailable.'
+    return
+}
+foreach ($requiredFile in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot $requiredFile) -PathType Leaf)) {
         throw "Required governance file is missing: $requiredFile"
     }

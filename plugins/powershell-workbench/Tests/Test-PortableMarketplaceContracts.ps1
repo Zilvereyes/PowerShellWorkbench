@@ -23,6 +23,8 @@ try{
     $installed=&$packager -Destination $destination -Confirm:$false
     Assert-True -Condition ($installed.State-eq'SUCCEEDED'-and$installed.Mode-eq'CleanInstall'-and$installed.WritePerformed-and-not$installed.RestorePerformed-and-not$installed.TransportPerformed) -Message 'Clean-install result contract failed.'
     &$pluginValidator -PluginRoot $installed.PluginPath|Out-Null
+    $installedGovernance=& (Join-Path $installed.PluginPath 'Tests\Test-GovernanceContracts.ps1')
+    Assert-True -Condition ($installedGovernance -match 'skipped: repository governance context is unavailable') -Message 'Installed plugin governance contract did not explicitly skip unavailable repository context.'
     $marketplace=Get-Content -LiteralPath $installed.MarketplacePath -Raw|ConvertFrom-Json
     Assert-True -Condition ([string]$marketplace.name-ceq'powershell-workbench') -Message 'Clean install marketplace name changed.'
     Assert-True -Condition ([string]$marketplace.plugins[0].source.path-ceq'./plugins/powershell-workbench') -Message 'Marketplace source path is not portable.'

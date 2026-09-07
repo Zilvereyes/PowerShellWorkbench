@@ -10,6 +10,7 @@ param(
     [ValidateRange(1024, 10485760)][int]$MaxRequestBytes = 1048576,
     [ValidateRange(1024, 1073741824)][long]$MaxResponseBytes = 16777216,
     [ValidateRange(1, 1048576)][int]$MaxOutputTokens = 4096,
+    [ValidateRange(1024, 1048576)][Nullable[int]]$ContextTokens,
     [ValidateRange(1, 1048576)][int]$ReadFileSliceMaximumBytes = 65536,
     [ValidateRange(0.0, 2.0)][double]$Temperature = 0.0,
     [Nullable[int]]$Seed,
@@ -92,6 +93,7 @@ $promptBytes = $utf8.GetByteCount($Prompt)
 if ($promptBytes -gt $MaxPromptBytes) { throw 'Prompt exceeds MaxPromptBytes.' }
 $options = [ordered]@{ temperature = $Temperature; num_predict = $MaxOutputTokens }
 if ($null -ne $Seed) { $options.seed = $Seed.Value }
+if ($null -ne $ContextTokens) { $options.num_ctx = [int]$ContextTokens }
 $request = [ordered]@{
     model = $ModelId
     messages = @([ordered]@{ role = 'user'; content = $Prompt })
@@ -115,6 +117,8 @@ $plan = [pscustomobject][ordered]@{
     requestBytes = $requestBytes.Length
     timeoutSeconds = $TimeoutSeconds
     maxResponseBytes = $MaxResponseBytes
+    requestedContextTokens = if ($null -ne $ContextTokens) { [int]$ContextTokens } else { $null }
+    observedContextTokens = $null
     networkPerformed = $false
     writePerformed = $false
     toolExecutionPerformed = $false
@@ -231,7 +235,7 @@ $metadata = [ordered]@{
     fixture = [ordered]@{ path = $fixtureResolved; sha256 = $fixtureSha256 }
     endpoint = [ordered]@{ uri = $Endpoint.AbsoluteUri; isLoopback = $true; wireApi = 'ollama-chat' }
     model = [ordered]@{ requestedId = $ModelId; observedId = $observedModel; expectedDigest = $ModelDigest.ToLowerInvariant(); digestAttestation = 'unverified-caller-declaration' }
-    limits = [ordered]@{ timeoutSeconds = $TimeoutSeconds; maxPromptBytes = $MaxPromptBytes; maxRequestBytes = $MaxRequestBytes; maxResponseBytes = $MaxResponseBytes; maxOutputTokens = $MaxOutputTokens }
+    limits = [ordered]@{ timeoutSeconds = $TimeoutSeconds; maxPromptBytes = $MaxPromptBytes; maxRequestBytes = $MaxRequestBytes; maxResponseBytes = $MaxResponseBytes; maxOutputTokens = $MaxOutputTokens; requestedContextTokens = if ($null -ne $ContextTokens) { [int]$ContextTokens } else { $null }; observedContextTokens = $null }
     toolProposal = [ordered]@{ readFileSliceEnabled = [bool]$EnableReadFileSliceProposal; maximumBytes = $ReadFileSliceMaximumBytes }
     observation = [ordered]@{ httpStatusCode = $httpStatusCode; done = $done; toolCallCount = $toolCallCount; toolDisposition = if ($toolCallCount -gt 0) { 'PROPOSED_NOT_EXECUTED' } else { 'NONE' } }
     effects = [ordered]@{ networkPerformed = $networkPerformed; writePerformed = $true; toolExecutionPerformed = $false; desktopLifecyclePerformed = $false; providerSwitchPerformed = $false; transportPerformed = $false }

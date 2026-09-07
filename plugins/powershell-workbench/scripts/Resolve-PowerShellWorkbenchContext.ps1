@@ -13,6 +13,8 @@ param(
 
     [switch]$Fast,
 
+    [switch]$SkipRuntimeProbe,
+
     [switch]$AllowAncestorHeuristics
 )
 
@@ -170,7 +172,8 @@ function Get-ContextResult {
         [string]$ProjectRootEvidence,
         [string]$ProfileEvidence,
         [psobject]$ServicingInventory,
-        [psobject]$DirectoryScan
+        [psobject]$DirectoryScan,
+        [switch]$SkipRuntimeProbe
     )
     if (-not $DirectoryScan) { $DirectoryScan = Get-DirectoryScan -Path $ProjectRoot }
     if (-not $ServicingInventory) { $ServicingInventory = Get-CachedServicingInventory -Path $ProjectRoot }
@@ -184,7 +187,8 @@ function Get-ContextResult {
         NativeTools=$ServicingInventory.NativeTools
         ArtifactTypes=$ServicingInventory.ArtifactTypes
         RiskSurfaces=$ServicingInventory.RiskSurfaces
-        DetectedPowerShellRuntimes=@(Get-PowerShellRuntimeInventory)
+        DetectedPowerShellRuntimes=if($SkipRuntimeProbe){@()}else{@(Get-PowerShellRuntimeInventory)}
+        RuntimeProbeState=if($SkipRuntimeProbe){'SKIPPED'}else{'OBSERVED'}
     }
 }
 
@@ -212,7 +216,7 @@ foreach ($root in $ancestors) {
             $profileName = 'WindowsServicingToolkit'
             $profileEvidence = 'Capability:WindowsServicingToolkit'
         }
-        Get-ContextResult -ProfileName $profileName -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $explicitProfile.Evidence -ProfileEvidence $profileEvidence -ServicingInventory $servicing -DirectoryScan $scan
+        Get-ContextResult -ProfileName $profileName -ProjectRoot $root -Source 'Boundary' -ProjectRootEvidence $explicitProfile.Evidence -ProfileEvidence $profileEvidence -ServicingInventory $servicing -DirectoryScan $scan -SkipRuntimeProbe:$SkipRuntimeProbe
         return
     }
 }
@@ -220,7 +224,7 @@ foreach ($root in $ancestors) {
 if ($RequestedProfile -ne 'Auto') {
     $scan = Get-DirectoryScan -Path $candidate
     $servicing = Get-CachedServicingInventory -Path $candidate
-    Get-ContextResult -ProfileName $RequestedProfile -ProjectRoot $candidate -Source 'RequestedProfile' -ProjectRootEvidence $candidate -ProfileEvidence ('RequestedProfile:' + $RequestedProfile) -ServicingInventory $servicing -DirectoryScan $scan
+    Get-ContextResult -ProfileName $RequestedProfile -ProjectRoot $candidate -Source 'RequestedProfile' -ProjectRootEvidence $candidate -ProfileEvidence ('RequestedProfile:' + $RequestedProfile) -ServicingInventory $servicing -DirectoryScan $scan -SkipRuntimeProbe:$SkipRuntimeProbe
     return
 }
 
@@ -238,7 +242,7 @@ if ($RegistryPath -and (Test-Path -LiteralPath $RegistryPath -PathType Leaf)) {
 foreach ($project in @($registry.projects)) {
         if ($project.path -and (Test-Path -LiteralPath $project.path -PathType Container) -and ($RequestedProfile -eq 'Auto' -or $project.profile -eq $RequestedProfile)) {
             $registeredRoot = [System.IO.Path]::GetFullPath([string]$project.path)
-            Get-ContextResult -ProfileName ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry' -ProjectRootEvidence $registeredRoot -ProfileEvidence ('Registry:' + [string]$project.profile)
+            Get-ContextResult -ProfileName ([string]$project.profile) -ProjectRoot $registeredRoot -Source 'Registry' -ProjectRootEvidence $registeredRoot -ProfileEvidence ('Registry:' + [string]$project.profile) -SkipRuntimeProbe:$SkipRuntimeProbe
             return
         }
     }
@@ -250,13 +254,13 @@ foreach ($root in $heuristicRoots) {
     $servicing = Get-CachedServicingInventory -Path $root
     $detectedProfile = Get-ProfileAtPath -Path $root -ServicingInventory $servicing -DirectoryScan $scan
     if ($detectedProfile) {
-        Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $root -Source 'Ancestor' -ProjectRootEvidence $root -ProfileEvidence ('HeuristicProfile:' + $detectedProfile) -ServicingInventory $servicing -DirectoryScan $scan
+        Get-ContextResult -ProfileName $detectedProfile -ProjectRoot $root -Source 'Ancestor' -ProjectRootEvidence $root -ProfileEvidence ('HeuristicProfile:' + $detectedProfile) -ServicingInventory $servicing -DirectoryScan $scan -SkipRuntimeProbe:$SkipRuntimeProbe
         return
     }
 }
 
 if ($RequestedProfile -eq 'Auto') {
-    Get-ContextResult -ProfileName 'Generic' -ProjectRoot $candidate -Source 'StartPath' -ProjectRootEvidence $candidate -ProfileEvidence 'StartPathFallback'
+    Get-ContextResult -ProfileName 'Generic' -ProjectRoot $candidate -Source 'StartPath' -ProjectRootEvidence $candidate -ProfileEvidence 'StartPathFallback' -SkipRuntimeProbe:$SkipRuntimeProbe
     return
 }
 
@@ -271,4 +275,5 @@ if ($RequestedProfile -eq 'Auto') {
     ArtifactTypes = @()
     RiskSurfaces = @()
     DetectedPowerShellRuntimes = @()
+    RuntimeProbeState = $(if($SkipRuntimeProbe){'SKIPPED'}else{'UNAVAILABLE'})
 }

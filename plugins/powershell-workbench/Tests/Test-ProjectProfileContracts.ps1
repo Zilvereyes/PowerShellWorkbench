@@ -8,7 +8,7 @@ try{
     $createdBytes=[IO.File]::ReadAllBytes($created.ProfilePath)
     if($createdBytes.Length -ge 3 -and $createdBytes[0] -eq 0xEF -and $createdBytes[1] -eq 0xBB -and $createdBytes[2] -eq 0xBF){throw 'Generated profile was not deterministic UTF-8 without BOM.'}
     $resolved=& $resolveProfile -ProfilePath $created.ProfilePath
-    if($resolved.ProjectName -ne 'FixtureProject' -or -not $resolved.ProjectRootExists -or $resolved.Components[0].ResolvedRoot -ne $tempRoot -or $resolved.PathDetails.reports.Exists -or -not $resolved.PathDetails.reports.WithinProject -or $resolved.PathDetails.reports.ConfiguredPath -ne 'Reports'){throw 'Portable project profile did not resolve its relative root and path evidence.'}
+    if($resolved.ProjectName -ne 'FixtureProject' -or -not $resolved.ProjectRootExists -or $resolved.Components[0].ResolvedRoot -ne $tempRoot -or $resolved.PathDetails.reports.Exists -or -not $resolved.PathDetails.reports.WithinProject -or $resolved.PathDetails.reports.ConfiguredPath -ne 'Reports' -or $resolved.Quality.BlockingRules -notcontains 'PSReviewUnusedParameter'){throw 'Portable project profile did not resolve its relative root, quality plan, and path evidence.'}
     $profileDocument=Get-Content -LiteralPath $created.ProfilePath -Raw|ConvertFrom-Json
     $profileDocument.components+=([pscustomobject]@{id='outside';root='..\..\outside';role='shared'})
     $profileDocument|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $created.ProfilePath -Encoding UTF8

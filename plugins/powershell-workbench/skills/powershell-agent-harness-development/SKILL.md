@@ -28,6 +28,7 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
 - Use `../../scripts/Invoke-PowerShellWorkbenchOllamaChat.ps1` to prepare a deterministic direct Ollama chat request.
   It remains `ANALYZE_ONLY` unless `-Execute` is explicit, permits only the credential-free literal loopback-IP HTTP `/api/chat` endpoint,
   disables streaming and thinking, and bounds prompt, request, response, timeout, and output tokens. Returned tool calls are evidence only and are never executed.
+  Supply `-ContextTokens` when a frozen comparison requires an explicit `num_ctx`; the request binds that value, while effective runtime context remains `UNKNOWN` until independently observed.
 - Use `../../scripts/Test-PowerShellWorkbenchOllamaEvidence.ps1` with an independently recorded metadata SHA-256. The response can attest the observed model id but not the model digest; accepting the caller-bound digest requires explicit `-AcceptUnverifiedModelDigest` and must not be reported as runtime attestation.
 - Use `../../scripts/Compare-PowerShellWorkbenchOllamaEvidence.ps1` with
   [assets/templates/model-comparison-manifest.json.tmpl](assets/templates/model-comparison-manifest.json.tmpl) to compare
@@ -42,6 +43,7 @@ Use this skill when PowerShell controls a model endpoint, coding-agent CLI, capa
   only new evidence under an explicit scoped evidence root, and never performs transport, process launch, target writes,
   provider switching, Desktop lifecycle, or clipboard access.
 - Use `../../scripts/Test-PowerShellWorkbenchHealth.ps1` before relying on installed plugin or catalog evidence. Supply explicit distribution source/cache pairs and catalog manifests; require catalog evidence when a downstream run depends on it. Unknown versions, duplicate roots, tree drift, stale manifests, missing artifacts, and hash drift fail closed without changing the installation.
+- Use `../../scripts/Invoke-PowerShellWorkbenchDoctor.ps1` for one read-only overview of explicitly supplied project and distribution evidence. Its default runtime state is `SKIPPED`; use `-IncludeRuntimeProbe` only when a child-PowerShell version/architecture probe is desired. It never discovers a marketplace source by guessing and never launches quality or model operations.
 - Use `../../scripts/Get-PowerShellWorkbenchStatusDashboard.ps1` with an independently hashed
   [release-provenance template](assets/templates/release-provenance.json.tmpl) to distinguish declared version, found
   source/cache trees, and validated release identity. It reuses health gates, binds every source tree to one commit/ref
