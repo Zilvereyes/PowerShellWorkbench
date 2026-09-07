@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 - Unreleased
+## 0.8.0 - 2026-09-07
 
 - Add a bounded, read-only text-integrity diagnostic for PowerShell sources. It reports encoding, byte hash, normalized-text hash, line endings, byte-only versus semantic drift, and invalid or unstable input without writing, starting processes, networking, or transporting data.
 - Add a hash-bound project assessment sidecar and portal view. It exposes source commit, host binding, sanitization state, exact per-target failed gates, verified evidence hashes, readiness (`PASS`, `WAITING`, `BLOCKED`, or `NOT_RUN`), and the next permitted action; missing or drifted state blocks rather than passing.
