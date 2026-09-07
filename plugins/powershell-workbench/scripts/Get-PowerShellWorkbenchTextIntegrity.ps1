@@ -5,6 +5,9 @@ param(
     [ValidateRange(1,1073741824)][long]$MaximumFileBytes = 16777216,
     [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedByteSha256,
     [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$ExpectedNormalizedTextSha256,
+    [ValidateSet('Utf8NoBom','Utf8Bom','Utf16LittleEndianBom','Utf16BigEndianBom','Utf32LittleEndianBom','Utf32BigEndianBom')][string[]]$AllowedEncoding,
+    [ValidateSet('LF','CRLF','CR','None')][string[]]$AllowedLineEnding,
+    [switch]$DisallowMixedLineEndings,
     [switch]$AsJson,
     [switch]$NoThrow
 )
@@ -90,7 +93,11 @@ try {
         }
     })
     if(@($records|Where-Object {$_.State -in @('CHANGED_DURING_READ','NOT_UTF8_TEXT')}).Count -gt 0){Add-FailedGate 'TextSnapshotReadable'}
-    $result=[pscustomobject]@{SchemaVersion='1.0';Passed=($failedGates.Count -eq 0);FailedGates=@($failedGates);RootPath=$resolved;FileCount=@($records).Count;Files=@($records);WritePerformed=$false;NetworkPerformed=$false;ProcessPerformed=$false;TransportPerformed=$false}
+    $textRecords=@($records|Where-Object {$_.State -eq 'TEXT'})
+    if($AllowedEncoding -and @($textRecords|Where-Object {$AllowedEncoding -notcontains $_.Encoding}).Count -gt 0){Add-FailedGate 'EncodingPolicy'}
+    if($AllowedLineEnding -and @($textRecords|Where-Object {$AllowedLineEnding -notcontains $_.LineEndings.Style}).Count -gt 0){Add-FailedGate 'LineEndingPolicy'}
+    if($DisallowMixedLineEndings -and @($textRecords|Where-Object {$_.LineEndings.Style -eq 'Mixed'}).Count -gt 0){Add-FailedGate 'MixedLineEndingsPolicy'}
+    $result=[pscustomobject]@{SchemaVersion='1.0';Passed=($failedGates.Count -eq 0);FailedGates=@($failedGates);RootPath=$resolved;FileCount=@($records).Count;Files=@($records);Policy=[pscustomobject]@{AllowedEncoding=@($AllowedEncoding);AllowedLineEnding=@($AllowedLineEnding);DisallowMixedLineEndings=[bool]$DisallowMixedLineEndings};WritePerformed=$false;NetworkPerformed=$false;ProcessPerformed=$false;TransportPerformed=$false}
     if($AsJson){$result|ConvertTo-Json -Depth 8}else{$result}
     if(-not $result.Passed -and -not $NoThrow){throw "Text integrity diagnostic failed: $($result.FailedGates -join ', ')."}
 } catch {

@@ -5,6 +5,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference='Stop'
 $pluginRoot=Split-Path -Parent $PSScriptRoot
 $assessmentScript=Join-Path $pluginRoot 'scripts\Get-PowerShellWorkbenchProjectAssessment.ps1'
+$newAssessmentScript=Join-Path $pluginRoot 'scripts\New-PowerShellWorkbenchProjectAssessment.ps1'
 $portalScript=Join-Path $pluginRoot 'scripts\Show-PowerShellWorkbenchProjectPortal.ps1'
 $tempRoot=Join-Path ([IO.Path]::GetTempPath()) ('powershell-workbench-assessment-'+[guid]::NewGuid().ToString('N'))
 $profileDirectory=Join-Path $tempRoot '.powershell-workbench'; $profilePath=Join-Path $profileDirectory 'project-profile.json'; $assessmentPath=Join-Path $profileDirectory 'project-assessment.json'
@@ -25,4 +26,15 @@ try{
     if($drifted.IsValid -or $drifted.ReadinessStatus -ne 'BLOCKED' -or $drifted.Targets[0].FailedGates -notcontains 'EvidenceHash' -or $drifted.Targets[0].FailedGates -notcontains 'PassRequiresVerifiedEvidence'){throw 'Drifted PASS evidence did not fail with exact target gates.'}
     $portal=& $portalScript -ProfilePath $profilePath -AssessmentPath $assessmentPath
     if($portal.Assessment.Targets[0].Evidence[0].State -ne 'DRIFTED' -or $portal.WasUpdated){throw 'Portal did not expose assessment drift read-only.'}
+    $previewPath=Join-Path $profileDirectory 'preview-assessment.json';$preview=& $newAssessmentScript -ProjectRoot $tempRoot -ProfilePath $profilePath -Destination $previewPath -NoWrite
+    if($preview.Mode -ne 'PREVIEW' -or $preview.WritePerformed -or (Test-Path -LiteralPath $previewPath) -or $preview.AssessmentDocument.schemaVersion -ne '1.1' -or $preview.AssessmentDocument.targets[0].status -ne 'NOT_RUN'){throw 'Assessment generator did not produce a non-writing, non-PASS preview.'}
+    $evidenceRoot=Join-Path $tempRoot 'KnowledgeBase';New-Item -ItemType Directory -Path $evidenceRoot -Force|Out-Null;$externalEvidence=Join-Path $evidenceRoot 'build.json';[IO.File]::WriteAllText($externalEvidence,'{"result":"pass"}',(New-Object Text.UTF8Encoding($false)))
+    $profileHash=(Get-FileHash -LiteralPath $profilePath -Algorithm SHA256).Hash.ToLowerInvariant();$externalHash=(Get-FileHash -LiteralPath $externalEvidence -Algorithm SHA256).Hash.ToLowerInvariant()
+    $nonGit=[ordered]@{schemaVersion='1.1';source=[ordered]@{kind='ledger';identity=[ordered]@{algorithm='SHA256';value=('b'*64)}};profileSha256=$profileHash;host=[ordered]@{binding='fixture-host';sanitizationStatus='SANITIZED'};nextAllowedAction='Review evidence.';targets=@([ordered]@{name='Windows 10 Home';status='PASS';applicability='APPLICABLE';freshness='FRESH';proofs=[ordered]@{safeOffline='VERIFIED';live='NOT_APPLICABLE';postcondition='VERIFIED'};evidence=@([ordered]@{path='KnowledgeBase/build.json';sha256=$externalHash})})}
+    $nonGit|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $assessmentPath -Encoding UTF8
+    $nonGitResult=& $assessmentScript -ProfilePath $profilePath -AssessmentPath $assessmentPath
+    if(-not $nonGitResult.IsValid -or $nonGitResult.Source.Kind -ne 'ledger' -or $nonGitResult.Targets[0].Evidence[0].State -ne 'VERIFIED'){throw 'Assessment 1.1 did not accept hash-bound non-Git evidence inside the project root.'}
+    $nonGit.profileSha256=('0'*64);$nonGit|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $assessmentPath -Encoding UTF8
+    $profileDrift=& $assessmentScript -ProfilePath $profilePath -AssessmentPath $assessmentPath
+    if($profileDrift.IsValid -or $profileDrift.FailedGates -notcontains 'ProfileHash'){throw 'Assessment 1.1 did not fail closed on profile hash drift.'}
 }finally{Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue}

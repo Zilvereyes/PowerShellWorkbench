@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1 - Unreleased
+
+- Make installed-plugin governance testing explicitly skip only when the complete repository governance context is unavailable; partial governance state still fails. Portable marketplace contracts now exercise this installed-artifact behavior.
+- Add optional fail-closed text policies for encoding, line endings, and mixed line endings while preserving 0.8.0's observation-only defaults.
+- Add Project Assessment schema 1.1 with non-Git SHA-256 source identities, profile hash binding, whole-project evidence containment, target applicability, freshness, and safe/offline/live/postcondition proof states. Add a preview-default assessment generator that never marks a target PASS.
+- Add a read-only Doctor overview for context, runtime, profile, assessment, text policy, explicit installation evidence, duplicate-identical channels, and the next safe action.
+- Make Doctor's default runtime state explicitly `SKIPPED`; its child-PowerShell runtime probe is opt-in.
+- Add optional `num_ctx` request binding to the bounded Ollama adapter. Requested context is recorded separately from unknown effective context; no runtime observation is invented.
+- Add portable quality-plan fields to new project profiles and correct the product display name to `PowerShell Workbench`.
+
 ## 0.8.0 - 2026-09-07
 
 - Add a bounded, read-only text-integrity diagnostic for PowerShell sources. It reports encoding, byte hash, normalized-text hash, line endings, byte-only versus semantic drift, and invalid or unstable input without writing, starting processes, networking, or transporting data.

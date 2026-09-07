@@ -24,6 +24,8 @@ try{
     $second=& $adapter -Prompt 'Explain the fixture.' -ModelId 'fixture-model' -ModelDigest $digest -OutputDirectory $neverCreated
     Assert-True ($first.result -eq 'ANALYZE_ONLY' -and -not $first.networkPerformed -and -not $first.writePerformed -and -not $first.toolExecutionPerformed) 'AnalyzeOnly performed an effect.'
     Assert-True ($first.requestSha256 -eq $second.requestSha256) 'AnalyzeOnly request identity was not deterministic.'
+    $withContext=& $adapter -Prompt 'Explain the fixture.' -ModelId 'fixture-model' -ModelDigest $digest -OutputDirectory $neverCreated -ContextTokens 8192
+    Assert-True ($withContext.result -eq 'ANALYZE_ONLY' -and $withContext.requestedContextTokens -eq 8192 -and $null -eq $withContext.observedContextTokens -and $withContext.requestSha256 -ne $first.requestSha256) 'Explicit requested context was not bound into the analysis request while observation remained unknown.'
     Assert-True (-not(Test-Path -LiteralPath $neverCreated)) 'AnalyzeOnly created its output directory.'
     Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'https://127.0.0.1:11434/api/chat'} 'must use http'
     Assert-Throw {& $adapter -Prompt x -ModelId x -ModelDigest $digest -Endpoint 'http://127.0.0.1:11434/api/generate'} 'exact credential-free'
