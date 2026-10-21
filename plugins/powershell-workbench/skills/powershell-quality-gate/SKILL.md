@@ -24,3 +24,7 @@ Run only the requested tier, expanding to later tiers only when the user asks:
 If a runtime, module, Docker, MegaLinter, or security capability is unavailable, mark that gate `SKIPPED` with the missing prerequisite. Never report an unavailable gate as passed. Preserve unrelated files and never disable rules or add broad exclusions without approval.
 
 Linear tracking is optional. Create or modify an issue only after an explicit user request and an exact preview of what will be written.
+
+## Generated-code checkpoint
+
+For generated or adapted executable code, apply `../powershell-scaffold/references/component-pipeline.md` before execution. This mandatory registration/parser/hash checkpoint is explicitly requested by the user and takes precedence over the general opt-in rule for validation of generated code. Broader lint, security scans and operational execution retain their existing scope. Every member and assembly requires a component ID; unavailable parsers block execution through this workflow.

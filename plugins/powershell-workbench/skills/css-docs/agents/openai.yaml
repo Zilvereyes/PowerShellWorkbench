@@ -1,0 +1,4 @@
+interface:
+  display_name: "Css Docs"
+  short_description: "Research css documentation"
+  default_prompt: "Find version-specific primary documentation for css components."

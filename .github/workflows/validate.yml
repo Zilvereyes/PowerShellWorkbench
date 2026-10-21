@@ -16,6 +16,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      - name: Validate component archive contracts
+        shell: pwsh
+        run: |
+          python --version
+          python -B -m unittest discover -s './plugins/powershell-workbench/Tests' -p test_workbench_components.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Component archive contract tests failed.' }
+
       - name: Validate with Windows PowerShell 5.1
         shell: powershell
         run: |

@@ -6,7 +6,9 @@ param(
     [string[]]$FunctionName = @(),
     [string[]]$RegionName = @(),
     [Alias('Write')][switch]$WriteOutput,
-    [switch]$Force
+    [switch]$Force,
+    [string]$ComponentArchive,
+    [string]$PythonExecutable = 'python'
 )
 
 Set-StrictMode -Version 2.0
@@ -107,12 +109,29 @@ $artifact = [pscustomobject][ordered]@{
     fragments = $fragmentArray
     failedGates = $failedGateArray
 }
+# Assign IDs to all fragments, even a preview; only a write persists registrations.
+foreach ($fragment in $fragmentArray) {
+    $fragment | Add-Member -NotePropertyName componentId -NotePropertyValue ([guid]::NewGuid().ToString())
+    $fragment | Add-Member -NotePropertyName componentVersion -NotePropertyValue '1.0.0'
+    $fragment | Add-Member -NotePropertyName componentSha256 -NotePropertyValue $null
+}
 $json = $artifact | ConvertTo-Json -Depth 12
 $resolvedOutput = [IO.Path]::GetFullPath($OutputPath)
 $state = if ($failedGates.Count -eq 0) { if ($WriteOutput) { 'READY_TO_WRITE' } else { 'PREVIEW' } } else { 'BLOCKED' }
 if ($WriteOutput -and $failedGates.Count -eq 0) {
     if ((Test-Path -LiteralPath $resolvedOutput) -and -not $Force) { throw 'OutputPath already exists. Use -Force to replace it.' }
     if ($PSCmdlet.ShouldProcess($resolvedOutput, 'Write PowerShell fragment template')) {
+        if (-not $ComponentArchive) { $ComponentArchive = Join-Path $resolvedRoot '.workbench/components' }
+        $registerHelper = Join-Path $PSScriptRoot 'Register-PowerShellWorkbenchGeneratedComponent.ps1'
+        foreach ($fragment in $fragmentArray) {
+            $snapshotPath = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N') + '.ps1')
+            try {
+                [IO.File]::WriteAllText($snapshotPath, [string]$fragment.text, (New-Object Text.UTF8Encoding($false)))
+                $record = & $registerHelper -SourcePath $snapshotPath -ArchivePath $ComponentArchive -Purpose ("Extracted " + $fragment.kind + ' ' + $fragment.name + ' from ' + $sourceRelative + ' sourceSha256=' + $sourceSha256) -ComponentId $fragment.componentId -PythonExecutable $PythonExecutable
+                $fragment.componentSha256 = $record.sha256
+            } finally { Remove-Item -LiteralPath $snapshotPath -Force -ErrorAction SilentlyContinue }
+        }
+        $json = $artifact | ConvertTo-Json -Depth 12
         $parent = Split-Path -Parent $resolvedOutput
         if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
         [IO.File]::WriteAllText($resolvedOutput, $json, (New-Object Text.UTF8Encoding($false)))

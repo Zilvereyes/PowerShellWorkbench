@@ -26,3 +26,8 @@ The generator replaces `NAME`, `PROFILE`, `DATE`, `GUID`, `PROJECT_ROOT`, `PROJE
 `New-PowerShellWorkbenchFragmentTemplate.ps1` creates hash-bound JSON templates from explicitly selected PowerShell functions and `#region` blocks. It defaults to preview/no-write and records the source relative path, source SHA-256, fragment line numbers, fragment text, and fragment SHA-256.
 
 `Join-PowerShellWorkbenchFragmentTemplate.ps1` composes one or more fragment templates into a PowerShell script. It verifies that every source file still matches the recorded SHA-256, rejects conflicting duplicate fragments, validates the composed script with the PowerShell parser, and defaults to preview/no-write. Generation performs no execution or transport.
+
+
+## Registered components
+
+Executable artifacts now require installed Python 3.10+ and register draft components, returning ComponentId, ComponentVersion and ComponentArchive with the FileInfo. Use -ComponentArchive to select the project archive and -PythonExecutable to select the runtime. Persisted fragments gain componentId/componentVersion/componentSha256; composed scripts register assembly IDs and known member pins. Preview remains no-write. Registration is not execution clearance. See component-pipeline.md.

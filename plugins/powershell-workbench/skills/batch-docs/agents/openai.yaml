@@ -1,0 +1,4 @@
+interface:
+  display_name: "Batch Docs"
+  short_description: "Research batch documentation"
+  default_prompt: "Find version-specific primary documentation for batch components."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Csharp Docs"
+  short_description: "Research csharp documentation"
+  default_prompt: "Find version-specific primary documentation for csharp components."

@@ -11,3 +11,7 @@ mega-linter.log
 Thumbs.db
 *.user
 *.suo
+
+# Python validation caches
+__pycache__/
+*.py[cod]

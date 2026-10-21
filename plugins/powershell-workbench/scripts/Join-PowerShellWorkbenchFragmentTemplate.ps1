@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory)][string]$OutputPath,
     [Parameter(Mandatory)][string]$ProjectRoot,
     [Alias('Write')][switch]$WriteOutput,
-    [switch]$Force
+    [switch]$Force,
+    [string]$ComponentArchive,
+    [string]$PythonExecutable = 'python'
 )
 
 Set-StrictMode -Version 2.0
@@ -28,6 +30,8 @@ $resolvedRoot = [IO.Path]::GetFullPath($ProjectRoot)
 $failedGates = New-Object 'System.Collections.Generic.List[string]'
 $fragments = New-Object System.Collections.Generic.List[object]
 $seen = @{}
+$componentPins = New-Object System.Collections.Generic.List[object]
+$assemblyComponentId = $null
 foreach ($path in @($TemplatePath)) {
     $resolvedTemplate = [IO.Path]::GetFullPath($path)
     if (-not (Test-Path -LiteralPath $resolvedTemplate -PathType Leaf)) { Add-Gate -List $failedGates -Gate 'TemplateExists'; continue }
@@ -52,6 +56,9 @@ foreach ($path in @($TemplatePath)) {
             continue
         }
         $seen[$key] = $hash
+        if ($null -ne $fragment.PSObject.Properties['componentId'] -and $null -ne $fragment.PSObject.Properties['componentSha256']) {
+            [void]$componentPins.Add([pscustomobject]@{ componentId=$fragment.componentId; version=$fragment.componentVersion; sha256=$fragment.componentSha256 })
+        }
         [void]$fragments.Add([pscustomobject][ordered]@{ kind=$kind; name=$name; sha256=$hash; text=$text.TrimEnd() })
     }
 }
@@ -83,8 +90,12 @@ if ($WriteOutput -and $failedGates.Count -eq 0) {
         $parent = Split-Path -Parent $resolvedOutput
         if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
         [IO.File]::WriteAllText($resolvedOutput, $scriptText, (New-Object Text.UTF8Encoding($false)))
+        if (-not $ComponentArchive) { $ComponentArchive = Join-Path $resolvedRoot '.workbench/components' }
+        $registerHelper = Join-Path $PSScriptRoot 'Register-PowerShellWorkbenchGeneratedComponent.ps1'
+        $record = & $registerHelper -SourcePath $resolvedOutput -ArchivePath $ComponentArchive -Purpose 'Composed PowerShell fragment assembly; review dependency closure and exports' -Kind assembly -Dependencies @($componentPins.ToArray()) -PythonExecutable $PythonExecutable
+        $assemblyComponentId = $record.componentId
         $state = 'SUCCEEDED'
     }
 }
 
-[pscustomobject][ordered]@{ schemaVersion='1.0'; state=$state; outputPath=$resolvedOutput; fragmentCount=$fragments.Count; contentSha256=Get-Sha256Text -Text $scriptText; failedGates=$failedGateArray; writePerformed=($state -eq 'SUCCEEDED'); executionPerformed=$false; transportPerformed=$false }
+[pscustomobject][ordered]@{ schemaVersion='1.0'; componentId=$assemblyComponentId; componentVersion='1.0.0'; state=$state; outputPath=$resolvedOutput; fragmentCount=$fragments.Count; contentSha256=Get-Sha256Text -Text $scriptText; failedGates=$failedGateArray; writePerformed=($state -eq 'SUCCEEDED'); executionPerformed=$false; transportPerformed=$false }

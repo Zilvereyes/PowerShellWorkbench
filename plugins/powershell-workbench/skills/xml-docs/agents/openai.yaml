@@ -1,0 +1,4 @@
+interface:
+  display_name: "Xml Docs"
+  short_description: "Research xml documentation"
+  default_prompt: "Find version-specific primary documentation for xml components."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sql Docs"
+  short_description: "Research sql documentation"
+  default_prompt: "Find version-specific primary documentation for sql components."

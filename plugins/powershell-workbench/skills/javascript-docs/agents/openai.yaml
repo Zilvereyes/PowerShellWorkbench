@@ -1,0 +1,4 @@
+interface:
+  display_name: "Javascript Docs"
+  short_description: "Research javascript documentation"
+  default_prompt: "Find version-specific primary documentation for javascript components."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lua Docs"
+  short_description: "Research lua documentation"
+  default_prompt: "Find version-specific primary documentation for lua components."

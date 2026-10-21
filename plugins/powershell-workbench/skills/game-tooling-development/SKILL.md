@@ -14,3 +14,10 @@ Use this skill for game-data utilities, World of Warcraft addon tooling, editor 
 5. Keep generated or extracted assets out of initial scans unless explicitly scoped. Do not redistribute proprietary game data or credentials.
 6. Route checks to each component's declared toolchain and use `powershell-quality-gate` only for requested aggregate validation.
 7. Read `references/wow-ecosystem.md` for the user-provided starting sources and project signals.
+
+
+## Registered file types and generation
+
+Route .ps1/.psm1/.psd1, .lua, .xml, .toc, .json/.jsonc, .js/.cjs/.mjs, .ts/.tsx, .cs/.csproj, .cmd/.bat, HTML/CSS and schemas to their native contracts. JSONC is not strict JSON; JSX/TSX is not plain JavaScript; project XML is not proof a build succeeds. Binary CASC/BLP/ADT/WDT/DBC/DB2 assets require format-specific readers and game-build evidence; never treat a text parser as validation. Use the file-type routing reference under powershell-scaffold.
+
+Apply ../powershell-scaffold/references/component-pipeline.md to every generated executable member and assembly before execution. Capture WoW client branch/build, Lua runtime, TOC load order, XML handlers and external API dependencies. Missing native/dialect parsers block the checkpoint; explicit data-only assets use format validation rather than execution clearance.

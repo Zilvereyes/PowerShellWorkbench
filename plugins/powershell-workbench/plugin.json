@@ -1,0 +1,29 @@
+{
+  "name": "powershell-workbench",
+  "version": "0.9.0-beta.1",
+  "description": "Portable PowerShell and mixed-language scaffolding, refactoring, discovery, agent harnesses, game tooling, and opt-in quality workflows.",
+  "author": {
+    "name": "Zilvereyes"
+  },
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "PowerShell Workbench",
+        "shortDescription": "Portable PowerShell tooling",
+        "longDescription": "Generate reusable PowerShell artifacts, discover and refactor single or multi-project workspaces, diagnose toolchains and patch transport, build safe PowerShell agent harnesses, package the plugin for another machine, and run quality or security gates only when requested.",
+        "developerName": "Zilvereyes",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive",
+          "Write"
+        ],
+        "defaultPrompt": [
+          "Create a dual-compatible PowerShell function.",
+          "Diagnose this project with the read-only Doctor, quality gate, and text-integrity checks.",
+          "Preview a hash-bound project assessment before writing any project profile sidecar."
+        ]
+      }
+    }
+  }
+}

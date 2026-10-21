@@ -21,3 +21,8 @@ Use this skill when the user wants to reuse, move, share, install, or update Pow
 When moving to another machine, optionally create `%USERPROFILE%\.config\powershell-workbench\projects.json` for projects that cannot be found by walking up from the active workspace.
 
 For a movable project configuration, create `.powershell-workbench/project-profile.json` with `../../scripts/New-PowerShellWorkbenchProjectProfile.ps1`. Keep project and component roots relative to that file; use `Resolve-PowerShellWorkbenchProjectProfile.ps1` to resolve and validate them before work. Use the existing `Show-PowerShellWorkbenchProjectPortal.ps1` portal to preview or explicitly update this versioned profile rather than embedding paths in scripts.
+
+
+## Shared release source
+
+Use Zilvereyes/PowerShellWorkbench as the known Git marketplace source; inspect its current revision and owning instructions before edits. Its root .agents/plugins/marketplace.json points to plugins/powershell-workbench. Build account-plugin updates and portable packages from the same reviewed commit. Record commit, version and tree hashes separately; an account plugin ID is not a Git ref. Read references/release-channels.md before refreshing or publishing either channel.

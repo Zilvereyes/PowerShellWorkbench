@@ -17,7 +17,11 @@ param(
 
     [string]$ProjectRoot,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [string]$ComponentArchive,
+
+    [string]$PythonExecutable = 'python'
 )
 
 Set-StrictMode -Version 2.0
@@ -57,6 +61,13 @@ switch ($Profile) {
         $loggingGuidance = 'Return structured objects and keep host-only output at the outer command boundary.'
         $safetyGuidance = 'Use ShouldProcess for mutations and keep destructive or elevated work explicit.'
     }
+}
+
+# Generated executable artifacts are registered as draft before they are handed off.
+$registerComponent = $Kind -in @('AdvancedFunction','Script','Module','Manifest','PesterBasic','PesterSynthetic','PesterContract','PSScriptAnalyzerConfig')
+if ($registerComponent) {
+    $pythonCommand = Get-Command -Name $PythonExecutable -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    if (-not $ComponentArchive) { $ComponentArchive = Join-Path $ProjectRoot '.workbench/components' }
 }
 
 $templateName = switch ($Kind) {
@@ -120,5 +131,23 @@ if ($PSCmdlet.ShouldProcess($outputPath, "Generate $Kind artifact")) {
         $null = New-Item -ItemType Directory -Path $resolvedDestination -Force
     }
     [System.IO.File]::WriteAllText($outputPath, $content, [System.Text.UTF8Encoding]::new($false))
-    Get-Item -LiteralPath $outputPath
+    if ($registerComponent) {
+        $contractFile = [IO.Path]::GetTempFileName()
+        try {
+            $contractJson = '{"inputs":[],"outputs":[],"bindings":[],"effects":[],"unresolved":["Generated template requires purpose-specific contract review"],"reviewed":false}'
+            [IO.File]::WriteAllText($contractFile, $contractJson, (New-Object Text.UTF8Encoding($false)))
+            $componentKind = if ($Kind -eq 'Module') { 'module' } elseif ($Kind -eq 'AdvancedFunction') { 'function' } else { 'script' }
+            $worker = Join-Path $PSScriptRoot 'workbench_components.py'
+            $registrationJson = & $pythonCommand.Source $worker register --archive $ComponentArchive --source $outputPath --language powershell --purpose "Generated $Kind template: $Name" --kind $componentKind --contract $contractFile
+            if ($LASTEXITCODE -ne 0) { throw "Component registration failed; generated file is not cleared for execution: $outputPath" }
+            $registration = ($registrationJson -join "`n") | ConvertFrom-Json
+            $item = Get-Item -LiteralPath $outputPath
+            $item | Add-Member -NotePropertyName ComponentId -NotePropertyValue $registration.componentId
+            $item | Add-Member -NotePropertyName ComponentVersion -NotePropertyValue $registration.version
+            $item | Add-Member -NotePropertyName ComponentArchive -NotePropertyValue $ComponentArchive
+            $item
+        } finally { Remove-Item -LiteralPath $contractFile -Force -ErrorAction SilentlyContinue }
+    } else {
+        Get-Item -LiteralPath $outputPath
+    }
 }

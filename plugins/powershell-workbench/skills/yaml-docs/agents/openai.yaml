@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yaml Docs"
+  short_description: "Research yaml documentation"
+  default_prompt: "Find version-specific primary documentation for yaml components."
