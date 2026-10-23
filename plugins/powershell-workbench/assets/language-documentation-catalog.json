@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.0",
+  "catalogId": "powershell-workbench-language-documentation",
+  "sources": [
+    {
+      "language": "xml",
+      "skill": "xml-docs",
+      "url": "https://www.w3.org/TR/xml/",
+      "scope": "XML version, namespaces, schema or application dialect",
+      "verification": "opened-2026-10-20"
+    },
+    {
+      "language": "batch",
+      "skill": "batch-docs",
+      "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/for",
+      "scope": "Batch file expansion, %% variables, delayed expansion, errorlevel and control flow",
+      "verification": "opened-2026-10-20"
+    },
+    {
+      "language": "cmd",
+      "skill": "cmd-docs",
+      "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd",
+      "scope": "cmd.exe switches, interactive versus batch parsing, quoting and command extensions",
+      "verification": "opened-2026-10-20"
+    },
+    {
+      "language": "lua",
+      "skill": "lua-docs",
+      "url": "https://www.lua.org/manual/5.4/",
+      "scope": "Exact Lua runtime, host embedding and game API version",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "python",
+      "skill": "python-docs",
+      "url": "https://docs.python.org/3/library/ast.html",
+      "scope": "Exact Python minor version, grammar and runtime APIs",
+      "verification": "opened-2026-10-20"
+    },
+    {
+      "language": "javascript",
+      "skill": "javascript-docs",
+      "url": "https://nodejs.org/api/cli.html",
+      "scope": "ECMAScript versus Node/browser runtime and CommonJS versus ESM",
+      "verification": "opened-2026-10-20"
+    },
+    {
+      "language": "typescript",
+      "skill": "typescript-docs",
+      "url": "https://www.typescriptlang.org/docs/",
+      "scope": "Compiler version, tsconfig, declaration and emit behavior",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "csharp",
+      "skill": "csharp-docs",
+      "url": "https://learn.microsoft.com/en-us/dotnet/csharp/",
+      "scope": "C# language version, SDK, framework and project type",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "json",
+      "skill": "json-docs",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259",
+      "scope": "Strict JSON syntax versus JSON Schema and application contract",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "yaml",
+      "skill": "yaml-docs",
+      "url": "https://yaml.org/spec/1.2.2/",
+      "scope": "YAML version, loader behavior, custom tags and schema",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "html",
+      "skill": "html-docs",
+      "url": "https://html.spec.whatwg.org/multipage/",
+      "scope": "HTML parsing versus browser DOM, scripts and application behavior",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "css",
+      "skill": "css-docs",
+      "url": "https://www.w3.org/Style/CSS/",
+      "scope": "Module level, browser support and cascade context",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "bash",
+      "skill": "bash-docs",
+      "url": "https://www.gnu.org/software/bash/manual/",
+      "scope": "Bash version versus POSIX sh and shell expansion rules",
+      "verification": "seed-not-opened"
+    },
+    {
+      "language": "sql",
+      "skill": "sql-docs",
+      "url": "https://learn.microsoft.com/en-us/sql/t-sql/language-reference",
+      "scope": "Identify database vendor/version first; this seed covers T-SQL only",
+      "verification": "seed-not-opened"
+    }
+  ]
+}

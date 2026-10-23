@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cmd Docs"
+  short_description: "Research cmd documentation"
+  default_prompt: "Find version-specific primary documentation for cmd components."

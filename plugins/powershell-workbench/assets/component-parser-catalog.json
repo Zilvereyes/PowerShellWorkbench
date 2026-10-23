@@ -1,0 +1,221 @@
+{
+  "schemaVersion": "1.0",
+  "catalogId": "powershell-workbench-components",
+  "components": [
+    {
+      "componentId": "421252ae-2673-52eb-abfa-2902bed006b2",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "powershell",
+      "purpose": "Non-executing powershell syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:powershell",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "powershell-ast"
+    },
+    {
+      "componentId": "6df2a275-aaf6-5aef-a9be-8315fb6b1800",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "xml",
+      "purpose": "Non-executing xml syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:xml",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "expat-policy"
+    },
+    {
+      "componentId": "b230b578-dcec-5cc4-9096-a7383b19872f",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "batch",
+      "purpose": "Non-executing batch syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "8b99abe9-21cc-5468-88c1-e0382d72e9f6",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "cmd",
+      "purpose": "Non-executing cmd syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "861c82af-ffec-542b-ac97-27e6d4c8c722",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "lua",
+      "purpose": "Non-executing lua syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:lua",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "luac-parse"
+    },
+    {
+      "componentId": "20b61ad4-4f59-5331-98b5-2534c033a4a7",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "python",
+      "purpose": "Non-executing python syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:python",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "stdlib-ast"
+    },
+    {
+      "componentId": "6d3958f8-bbfe-519f-b972-8f4761154669",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "javascript",
+      "purpose": "Non-executing javascript syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:javascript",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "node-check"
+    },
+    {
+      "componentId": "fbe98f0e-04b4-59bb-8e67-92e40a90af8d",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "typescript",
+      "purpose": "Non-executing typescript syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "4e10e468-f7f6-50a8-b956-b6f73493478e",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "csharp",
+      "purpose": "Non-executing csharp syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "1b94f7d5-ee40-5bbb-9adc-9f25a0b9225d",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "json",
+      "purpose": "Non-executing json syntax preflight",
+      "status": "implemented",
+      "entryPoint": "scripts/workbench_components.py",
+      "selector": "parse:json",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "backend": "strict-json"
+    },
+    {
+      "componentId": "aae103a6-6fb6-5e3d-9070-392cbd8a2019",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "yaml",
+      "purpose": "Non-executing yaml syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "723722b2-0255-5a02-af0f-5d315e3a95c4",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "html",
+      "purpose": "Non-executing html syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "a448ea12-2dba-567a-93d9-2214b0b5b7e4",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "css",
+      "purpose": "Non-executing css syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "84b99a3b-d700-55d5-aca7-0ac65c13f175",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "bash",
+      "purpose": "Non-executing bash syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "74056a40-311f-5624-994f-2532e3a003ef",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "sql",
+      "purpose": "Non-executing sql syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "378a9f35-b60a-50ab-b4e1-05f2758e6bc2",
+      "version": "1.0.0",
+      "kind": "parser-adapter",
+      "language": "toc",
+      "purpose": "Non-executing toc syntax preflight",
+      "status": "reserved-unavailable"
+    },
+    {
+      "componentId": "eadac9b7-eb50-5dd8-ac50-82d8d8a726fa",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: workbench_components",
+      "entryPoint": "scripts/workbench_components.py",
+      "sha256": "961f1f6dc4b4f4b24c0c295f6cf847e735715e29184bf8ab842f33c32065da42",
+      "status": "implementation"
+    },
+    {
+      "componentId": "0dd90e3d-a736-5547-8de7-b0d212e7dd05",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: Get-PowerShellWorkbenchCodeAnalysis",
+      "entryPoint": "scripts/Get-PowerShellWorkbenchCodeAnalysis.ps1",
+      "sha256": "9edb1992a6eca25dcb17d43ed7100a1136d103f5b5070e997b1a663c8bbd264e",
+      "status": "implementation"
+    },
+    {
+      "componentId": "09f978e2-264a-5e9e-810a-2a5f277815b1",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: Invoke-PowerShellWorkbenchComponent",
+      "entryPoint": "scripts/Invoke-PowerShellWorkbenchComponent.ps1",
+      "sha256": "4dca47f0c51f134bd90b0dda35361ca56274ec34c06446b369a9e0667a8ee47b",
+      "status": "implementation"
+    },
+    {
+      "componentId": "e54efea5-1e41-5512-9874-34208bc768c0",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: Register-PowerShellWorkbenchGeneratedComponent",
+      "entryPoint": "scripts/Register-PowerShellWorkbenchGeneratedComponent.ps1",
+      "sha256": "cfb248e80798f22383a15c61165eede41c374be2f3bd19cd76e071bd578338ca",
+      "status": "implementation"
+    },
+    {
+      "componentId": "ecfad4de-345c-5fe7-9ee3-08db85bbb726",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: New-PowerShellArtifact",
+      "entryPoint": "scripts/New-PowerShellArtifact.ps1",
+      "sha256": "00dcaca252f48790f5bb8acd4d9c18bab65ed1bfdd994392a07e43cd1d034c48",
+      "status": "implementation"
+    },
+    {
+      "componentId": "ed235cfe-7ff4-5218-b752-76572229dcb3",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: New-PowerShellWorkbenchFragmentTemplate",
+      "entryPoint": "scripts/New-PowerShellWorkbenchFragmentTemplate.ps1",
+      "sha256": "1e0cec831efb9acf82b5929c6c6b8271aadf11450cd9dfb33be8585d2830736a",
+      "status": "implementation"
+    },
+    {
+      "componentId": "c78c5fbd-397a-50bd-b18d-56a29ffee3ae",
+      "version": "1.0.0",
+      "kind": "script",
+      "purpose": "Workbench component pipeline: Join-PowerShellWorkbenchFragmentTemplate",
+      "entryPoint": "scripts/Join-PowerShellWorkbenchFragmentTemplate.ps1",
+      "sha256": "e8e1d2efd7db9239c55241f9dadce084102e4ddbce33a196d1144f82bd90e594",
+      "status": "implementation"
+    }
+  ]
+}

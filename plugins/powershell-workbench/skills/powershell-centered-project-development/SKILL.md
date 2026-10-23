@@ -15,3 +15,8 @@ Use this skill when a project combines PowerShell with Python, Node, .NET, nativ
 6. Apply templates from `powershell-scaffold` for PowerShell, JSON/YAML, Markdown, and CI support. Do not force a PowerShell template onto a non-PowerShell component.
 7. Route requested validation through `powershell-quality-gate`, selecting the smallest native checks for the changed technologies. MegaLinter is an optional broad aggregator, not a replacement for repository-declared tools.
 8. Do not add, upgrade, or publish dependencies, packages, Actions, or external services unless the user explicitly requests that change.
+
+
+## Generated-code checkpoint
+
+For generated or adapted executable code, apply `../powershell-scaffold/references/component-pipeline.md` before execution. This mandatory registration/parser/hash checkpoint is explicitly requested by the user and takes precedence over the general opt-in rule for validation of generated code. Broader lint, security scans and operational execution retain their existing scope. Every member and assembly requires a component ID; unavailable parsers block execution through this workflow.

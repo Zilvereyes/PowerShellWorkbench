@@ -15,3 +15,8 @@ Use this skill for implementation changes, modularization, duplication removal, 
 6. Keep syntax and runtime behavior compatible with both Windows PowerShell 5.1 and PowerShell 7.
 7. Do not elevate, service images, execute installers, delete caches, or write recovery media without an explicit request.
 8. Do not run lint, tests, MegaLinter, or security scans unless requested. When requested, route to `powershell-quality-gate`.
+
+
+## Generated-code checkpoint
+
+For generated or adapted executable code, apply `../powershell-scaffold/references/component-pipeline.md` before execution. This mandatory registration/parser/hash checkpoint is explicitly requested by the user and takes precedence over the general opt-in rule for validation of generated code. Broader lint, security scans and operational execution retain their existing scope. Every member and assembly requires a component ID; unavailable parsers block execution through this workflow.

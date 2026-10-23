@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bash Docs"
+  short_description: "Research bash documentation"
+  default_prompt: "Find version-specific primary documentation for bash components."

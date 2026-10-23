@@ -1,0 +1,4 @@
+interface:
+  display_name: "Html Docs"
+  short_description: "Research html documentation"
+  default_prompt: "Find version-specific primary documentation for html components."

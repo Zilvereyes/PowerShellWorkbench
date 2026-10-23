@@ -1,6 +1,6 @@
 {
   "name": "powershell-workbench",
-  "version": "0.8.2",
+  "version": "0.9.0-beta.1",
   "description": "Portable PowerShell and mixed-language scaffolding, refactoring, discovery, agent harnesses, game tooling, and opt-in quality workflows.",
   "author": {
     "name": "Zilvereyes"
@@ -8,11 +8,14 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "PowerShell Workbench",
-    "shortDescription": "Build and improve dual-compatible PowerShell safely.",
+    "shortDescription": "Portable PowerShell tooling",
     "longDescription": "Generate reusable PowerShell artifacts, discover and refactor single or multi-project workspaces, diagnose toolchains and patch transport, build safe PowerShell agent harnesses, package the plugin for another machine, and run quality or security gates only when requested.",
     "developerName": "Zilvereyes",
     "category": "Productivity",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "defaultPrompt": [
       "Create a dual-compatible PowerShell function.",
       "Diagnose this project with the read-only Doctor, quality gate, and text-integrity checks.",

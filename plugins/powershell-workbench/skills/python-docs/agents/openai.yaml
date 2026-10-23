@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Docs"
+  short_description: "Research python documentation"
+  default_prompt: "Find version-specific primary documentation for python components."

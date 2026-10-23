@@ -1,0 +1,3 @@
+# Component catalog hashes bind exact source bytes across every host.
+plugins/powershell-workbench/scripts/*.ps1 text eol=lf
+plugins/powershell-workbench/scripts/*.py text eol=lf

@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "1.0",
+  "routes": [
+    {
+      "extensions": [
+        ".ps1",
+        ".psm1",
+        ".psd1"
+      ],
+      "language": "powershell",
+      "limitations": "PowerShell syntax; data-file restrictions need separate validation"
+    },
+    {
+      "extensions": [
+        ".lua"
+      ],
+      "language": "lua",
+      "limitations": "Exact host Lua version and WoW API contract"
+    },
+    {
+      "extensions": [
+        ".xml",
+        ".xsd",
+        ".csproj",
+        ".vsixmanifest"
+      ],
+      "language": "xml",
+      "limitations": "Well-formedness only; schema/project/dialect checks required"
+    },
+    {
+      "extensions": [
+        ".bat"
+      ],
+      "language": "batch",
+      "limitations": "No bundled syntax-only parser"
+    },
+    {
+      "extensions": [
+        ".cmd"
+      ],
+      "language": "cmd",
+      "limitations": "No bundled syntax-only parser"
+    },
+    {
+      "extensions": [
+        ".toc"
+      ],
+      "language": "toc",
+      "limitations": "WoW manifest/load order; reserved parser contract"
+    },
+    {
+      "extensions": [
+        ".json"
+      ],
+      "language": "json",
+      "limitations": "Strict JSON only"
+    },
+    {
+      "extensions": [
+        ".jsonc"
+      ],
+      "language": "json",
+      "limitations": "JSONC is unsupported by strict JSON adapter"
+    },
+    {
+      "extensions": [
+        ".js",
+        ".cjs",
+        ".mjs"
+      ],
+      "language": "javascript",
+      "limitations": "CommonJS/ESM distinction; .js defaults to CJS in snapshot adapter"
+    },
+    {
+      "extensions": [
+        ".jsx"
+      ],
+      "language": "javascript",
+      "limitations": "JSX requires a project parser; not accepted as plain JavaScript"
+    },
+    {
+      "extensions": [
+        ".ts",
+        ".tsx"
+      ],
+      "language": "typescript",
+      "limitations": "Project TypeScript/JSX parser required"
+    },
+    {
+      "extensions": [
+        ".cs"
+      ],
+      "language": "csharp",
+      "limitations": "Project compiler parse API required; never run build targets as syntax-only validation"
+    },
+    {
+      "extensions": [
+        ".py"
+      ],
+      "language": "python",
+      "limitations": "Installed Python grammar"
+    },
+    {
+      "extensions": [
+        ".yml",
+        ".yaml"
+      ],
+      "language": "yaml",
+      "limitations": "Safe parser/schema required"
+    },
+    {
+      "extensions": [
+        ".html",
+        ".htm"
+      ],
+      "language": "html",
+      "limitations": "HTML parser and application/browser checks"
+    },
+    {
+      "extensions": [
+        ".css"
+      ],
+      "language": "css",
+      "limitations": "CSS module/dialect parser required"
+    },
+    {
+      "extensions": [
+        ".sh",
+        ".bash"
+      ],
+      "language": "bash",
+      "limitations": "Shell dialect and syntax-only parser required"
+    },
+    {
+      "extensions": [
+        ".sql"
+      ],
+      "language": "sql",
+      "limitations": "Identify database vendor before parsing"
+    },
+    {
+      "extensions": [
+        ".blp",
+        ".adt",
+        ".wdt",
+        ".dbc",
+        ".db2",
+        ".casc"
+      ],
+      "language": "binary",
+      "limitations": "Format/build-specific reader required; never send to text parser"
+    }
+  ]
+}

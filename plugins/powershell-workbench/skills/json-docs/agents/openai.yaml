@@ -1,0 +1,4 @@
+interface:
+  display_name: "Json Docs"
+  short_description: "Research json documentation"
+  default_prompt: "Find version-specific primary documentation for json components."

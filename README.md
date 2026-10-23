@@ -186,3 +186,27 @@ The marketplace manifest points to `./plugins/powershell-workbench`. Project pat
 ## Safety
 
 The plugin does not perform elevation, image servicing, installer execution, cache deletion, recovery-media writes, or remote backlog writes unless explicitly requested.
+
+## Component pipeline preview (0.9.0-beta.1)
+
+PowerShell Workbench remains the shared plugin and marketplace source. The preview extends
+`powershell-scaffold` with archive-first selection, draft component registration, immutable
+UUID/version/hash records, dependency pins and a mandatory checkpoint before generated code
+is executed through the Workbench workflow. Python 3.10+ is required by the archive worker;
+the PowerShell entrypoints accept `-PythonExecutable` and `-ComponentArchive`.
+
+New documentation entrypoints cover XML, Batch, CMD, Lua, Python, JavaScript, TypeScript,
+C#, JSON, YAML, HTML, CSS, Bash, SQL and WoW TOC. These are documentation foundations, not
+a promise of full parser support. Parser adapters exist for PowerShell, XML, Python, JSON,
+JavaScript and Lua; the others are reserved and block the checkpoint until implemented.
+
+See the plugin's `skills/powershell-scaffold/references/component-pipeline.md`,
+`assets/component-parser-catalog.json` and `assets/file-type-routes.json`. AST inventory does
+not prove dependency closure, and syntax success does not prove runtime behavior. The
+checkpoint does not intercept external shells or authorize system mutations.
+
+Both the account plugin and the Git marketplace should be built from the same reviewed
+commit. Refreshing one channel does not update the other automatically. See
+`skills/powershell-workbench-portability/references/release-channels.md` inside the plugin.
+On each machine inspect the installed Codex version and supported marketplace commands;
+select a new reviewed ref explicitly when the old installation uses an immutable pin.
